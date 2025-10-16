@@ -5,25 +5,27 @@ const WIDTH = 1200;
 const HEIGHT = 900;
 const FONT_FAMILY = 'sans-serif';
 
-const GREEK_TO_LATIN = {
-    '\u0391': 'A', '\u0392': 'B', '\u0393': 'G', '\u0394': 'D', '\u0395': 'E', '\u0396': 'Z', '\u0397': 'H', '\u0398': 'TH',
-    '\u0399': 'I', '\u039A': 'K', '\u039B': 'L', '\u039C': 'M', '\u039D': 'N', '\u039E': 'X', '\u039F': 'O', '\u03A0': 'P',
-    '\u03A1': 'R', '\u03A3': 'S', '\u03A4': 'T', '\u03A5': 'Y', '\u03A6': 'F', '\u03A7': 'CH', '\u03A8': 'PS', '\u03A9': 'O',
-    '\u03B1': 'a', '\u03B2': 'b', '\u03B3': 'g', '\u03B4': 'd', '\u03B5': 'e', '\u03B6': 'z', '\u03B7': 'i', '\u03B8': 'th',
-    '\u03B9': 'i', '\u03BA': 'k', '\u03BB': 'l', '\u03BC': 'm', '\u03BD': 'n', '\u03BE': 'x', '\u03BF': 'o', '\u03C0': 'p',
-    '\u03C1': 'r', '\u03C3': 's', '\u03C2': 's', '\u03C4': 't', '\u03C5': 'y', '\u03C6': 'f', '\u03C7': 'ch', '\u03C8': 'ps',
-    '\u03C9': 'o'
-};
+const GREEK_PAIRS = [
+    ['?', 'A'], ['?', 'A'], ['?', 'B'], ['G', 'G'], ['?', 'D'], ['?', 'E'], ['?', 'E'], ['?', 'Z'], ['?', 'I'],
+    ['?', 'I'], ['T', 'TH'], ['?', 'I'], ['?', 'I'], ['?', 'K'], ['?', 'L'], ['?', 'M'], ['?', 'N'], ['?', 'X'],
+    ['?', 'O'], ['?', 'O'], ['?', 'P'], ['?', 'R'], ['S', 'S'], ['?', 'T'], ['?', 'Y'], ['?', 'Y'], ['F', 'F'],
+    ['?', 'CH'], ['?', 'PS'], ['O', 'O'], ['?', 'O'],
+    ['a', 'a'], ['?', 'a'], ['ß', 'b'], ['?', 'g'], ['d', 'd'], ['e', 'e'], ['?', 'e'], ['?', 'z'], ['?', 'i'],
+    ['?', 'i'], ['?', 'th'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'k'], ['?', 'l'], ['µ', 'm'],
+    ['?', 'n'], ['?', 'x'], ['?', 'o'], ['?', 'o'], ['p', 'p'], ['?', 'r'], ['?', 's'], ['s', 's'], ['t', 't'],
+    ['?', 'y'], ['?', 'y'], ['?', 'y'], ['?', 'y'], ['f', 'f'], ['?', 'ch'], ['?', 'ps'], ['?', 'o'], ['?', 'o']
+];
+
+const GREEK_TO_LATIN = new Map(GREEK_PAIRS);
 
 const latinize = (value) =>
-    String(value ?? '')
-        .split('')
+    [...String(value ?? '')]
         .map((char) => {
-            if (GREEK_TO_LATIN[char]) return GREEK_TO_LATIN[char];
-            const lower = char.toLowerCase();
-            if (GREEK_TO_LATIN[lower]) {
-                const mapped = GREEK_TO_LATIN[lower];
-                return char === lower ? mapped : mapped.toUpperCase();
+            if (GREEK_TO_LATIN.has(char)) return GREEK_TO_LATIN.get(char);
+            const upper = char.toUpperCase();
+            if (GREEK_TO_LATIN.has(upper)) {
+                const replacement = GREEK_TO_LATIN.get(upper);
+                return char === upper ? replacement : replacement.toLowerCase();
             }
             return char;
         })
