@@ -36,19 +36,19 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         legend: {
             display: Boolean(xLabel),
             labels: {
-                font: { family: FONT_FAMILY, size: 14, weight: '600' },
+                font: { family: FONT_FAMILY, size: 14, weight: 'bold' },
                 color: '#1f1f1f',
             },
         },
         title: {
             display: Boolean(title),
             text: title,
-            font: { family: FONT_FAMILY, size: 20, weight: '700' },
+            font: { family: FONT_FAMILY, size: 20, weight: 'bold' },
             color: '#1f1f1f',
         },
         tooltip: {
             bodyFont: { family: FONT_FAMILY, size: 14 },
-            titleFont: { family: FONT_FAMILY, size: 16, weight: '700' },
+            titleFont: { family: FONT_FAMILY, size: 16, weight: 'bold' },
         },
     },
     scales: {
@@ -59,7 +59,7 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
                 color: '#1f1f1f',
             },
             title: xLabel
-                ? { text: xLabel, display: true, font: { family: FONT_FAMILY, size: 14, weight: '600' } }
+                ? { text: xLabel, display: true, font: { family: FONT_FAMILY, size: 14, weight: 'bold' } }
                 : undefined,
         },
         y: {
