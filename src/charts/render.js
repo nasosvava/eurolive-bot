@@ -1,10 +1,13 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import canvasPkg from '@napi-rs/canvas';
 import path from 'node:path';
 import url from 'node:url';
 
-const { GlobalFonts } = canvasPkg;
+if (!process.env.DISABLE_SYSTEM_FONTS_LOAD) {
+    process.env.DISABLE_SYSTEM_FONTS_LOAD = '1';
+}
+
+const { GlobalFonts } = await import('@napi-rs/canvas');
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 

@@ -42,6 +42,7 @@ tmp/
 temp/
 *.log
 logs/
+logs.*
 pids/
 *.pid
 *.pid.lock
