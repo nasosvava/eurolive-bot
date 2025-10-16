@@ -1,5 +1,6 @@
 // src/charts/render.js
-import { ChartJSNodeCanvas, registerFont } from 'chartjs-node-canvas';
+import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { registerFont } from 'canvas';
 import path from 'node:path';
 import url from 'node:url';
 
