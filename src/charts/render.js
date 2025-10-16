@@ -4,18 +4,19 @@ import canvasPkg from '@napi-rs/canvas';
 import path from 'node:path';
 import url from 'node:url';
 
-const { registerFont } = canvasPkg;
+const { GlobalFonts } = canvasPkg;
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
-registerFont(path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf'), {
-    family: 'Noto Sans',
-    weight: 'normal',
-});
-registerFont(path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf'), {
-    family: 'Noto Sans',
-    weight: 'bold',
-});
+const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
+const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
+
+if (!GlobalFonts.has('Noto Sans')) {
+    GlobalFonts.registerFromPath(regularFontPath, 'Noto Sans');
+}
+if (!GlobalFonts.has('Noto Sans Bold')) {
+    GlobalFonts.registerFromPath(boldFontPath, 'Noto Sans Bold');
+}
 
 // Large enough for Discord embeds; tune as needed
 const WIDTH = 1200;
