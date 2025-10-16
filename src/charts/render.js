@@ -1,5 +1,19 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { registerFont } from '@napi-rs/canvas';
+import path from 'node:path';
+import url from 'node:url';
+
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+
+registerFont(path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf'), {
+    family: 'Noto Sans',
+    weight: 'normal',
+});
+registerFont(path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf'), {
+    family: 'Noto Sans',
+    weight: 'bold',
+});
 
 // Large enough for Discord embeds; tune as needed
 const WIDTH = 1200;
@@ -9,6 +23,9 @@ const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white', // solid bg looks best in Discord dark mode too
+    chartCallback: (ChartJS) => {
+        ChartJS.defaults.font.family = 'Noto Sans';
+    },
 });
 
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
