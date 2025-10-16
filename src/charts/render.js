@@ -1,8 +1,10 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import { registerFont } from '@napi-rs/canvas';
+import canvasPkg from '@napi-rs/canvas';
 import path from 'node:path';
 import url from 'node:url';
+
+const { registerFont } = canvasPkg;
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 

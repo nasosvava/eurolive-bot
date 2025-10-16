@@ -78,4 +78,6 @@ Icon?
 # ─────────────────────────────────────────
 docker-compose.override.yml
 assets/fonts/
+!assets/fonts/
+!assets/fonts/*.ttf
 !src/charts/render.js
