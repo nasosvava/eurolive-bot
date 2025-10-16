@@ -14,23 +14,68 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
 const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
 
-if (!GlobalFonts.has('Noto Sans')) {
-    GlobalFonts.registerFromPath(regularFontPath, 'Noto Sans');
-}
-if (!GlobalFonts.has('Noto Sans Bold')) {
-    GlobalFonts.registerFromPath(boldFontPath, 'Noto Sans Bold');
-}
+const FONT_FAMILY = 'Noto Sans';
+const BOLD_FONT_FAMILY = 'Noto Sans Bold';
 
-// Large enough for Discord embeds; tune as needed
+GlobalFonts.registerFromPath(regularFontPath, FONT_FAMILY);
+GlobalFonts.registerFromPath(boldFontPath, BOLD_FONT_FAMILY);
+
+// Chart setup for Discord embeds
 const WIDTH = 1200;
 const HEIGHT = 900;
 
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
-    backgroundColour: 'white', // solid bg looks best in Discord dark mode too
+    backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        ChartJS.defaults.font.family = 'Noto Sans';
+        ChartJS.defaults.font.family = FONT_FAMILY;
+        ChartJS.defaults.font.size = 14;
+        ChartJS.defaults.color = '#1f1f1f';
+    },
+});
+
+const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
+    indexAxis,
+    responsive: false,
+    layout: { padding: 16 },
+    plugins: {
+        legend: {
+            display: Boolean(xLabel),
+            labels: {
+                font: { family: FONT_FAMILY, size: 14, weight: 'bold' },
+                color: '#1f1f1f',
+            },
+        },
+        title: {
+            display: Boolean(title),
+            text: title,
+            font: { family: BOLD_FONT_FAMILY, size: 20, weight: 'bold' },
+            color: '#1f1f1f',
+        },
+        tooltip: {
+            bodyFont: { family: FONT_FAMILY, size: 14 },
+            titleFont: { family: BOLD_FONT_FAMILY, size: 16 },
+        },
+    },
+    scales: {
+        x: {
+            beginAtZero,
+            ticks: {
+                font: { family: FONT_FAMILY, size: 12 },
+                color: '#1f1f1f',
+            },
+            title: xLabel
+                ? { text: xLabel, display: true, font: { family: FONT_FAMILY, size: 14, weight: 'bold' } }
+                : undefined,
+        },
+        y: {
+            beginAtZero,
+            ticks: {
+                font: { family: FONT_FAMILY, size: 12 },
+                color: '#1f1f1f',
+            },
+        },
     },
 });
 
@@ -42,26 +87,16 @@ export async function renderHorizontalBar({ labels, values, title, xLabel, color
             datasets: [{
                 label: xLabel || '',
                 data: values,
-                backgroundColor: Array.isArray(colors) && colors.length ? colors : undefined,
+                backgroundColor: Array.isArray(colors) && colors.length ? colors : '#cc2033',
+                borderRadius: 4,
             }],
         },
-        options: {
-            indexAxis: 'y',
-            responsive: false,
-            plugins: {
-                legend: { display: Boolean(xLabel) },
-                title: { display: Boolean(title), text: title },
-                tooltip: { enabled: true },
-            },
-            scales: {
-                x: { beginAtZero: true },
-                y: { ticks: { autoSkip: false, maxTicksLimit: 50 } },
-            },
-        },
+        options: buildCommonOptions({ title, xLabel, indexAxis: 'y' }),
     };
 
     return chart.renderToBuffer(configuration, 'image/png');
 }
+
 export async function renderComparisonChart({ teamA, teamB, title, metricLabel }) {
     const configuration = {
         type: 'bar',
@@ -71,25 +106,18 @@ export async function renderComparisonChart({ teamA, teamB, title, metricLabel }
                 {
                     label: teamA.teamName,
                     data: [teamA.value],
-                    backgroundColor: teamA.color || '#007bff',
+                    backgroundColor: teamA.color || '#cc2033',
+                    borderRadius: 6,
                 },
                 {
                     label: teamB.teamName,
                     data: [teamB.value],
-                    backgroundColor: teamB.color || '#ff0000',
+                    backgroundColor: teamB.color || '#0c7b43',
+                    borderRadius: 6,
                 },
             ],
         },
-        options: {
-            responsive: false,
-            plugins: {
-                title: { display: true, text: title },
-                legend: { position: 'top' },
-            },
-            scales: {
-                y: { beginAtZero: true },
-            },
-        },
+        options: buildCommonOptions({ title, beginAtZero: true }),
     };
 
     return chart.renderToBuffer(configuration, 'image/png');
@@ -101,19 +129,11 @@ export async function renderMultiComparisonChart({ labels, teamA, teamB, title }
         data: {
             labels,
             datasets: [
-                { label: teamA.label, data: teamA.values, backgroundColor: teamA.color || '#007bff' },
-                { label: teamB.label, data: teamB.values, backgroundColor: teamB.color || '#ff3b30' },
+                { label: teamA.label, data: teamA.values, backgroundColor: teamA.color || '#cc2033', borderRadius: 4 },
+                { label: teamB.label, data: teamB.values, backgroundColor: teamB.color || '#0c7b43', borderRadius: 4 },
             ],
         },
-        options: {
-            responsive: false,
-            plugins: {
-                title: { display: Boolean(title), text: title },
-                legend: { position: 'top' },
-                tooltip: { enabled: true },
-            },
-            scales: { y: { beginAtZero: true } },
-        },
+        options: buildCommonOptions({ title, beginAtZero: true }),
     };
 
     return chart.renderToBuffer(configuration, 'image/png');
