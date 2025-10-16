@@ -23,6 +23,7 @@
     "chartjs-node-canvas": "^5.0.0",
     "discord.js": "^14.23.2",
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "fast-xml-parser": "^5.3.0"
   }
 }
