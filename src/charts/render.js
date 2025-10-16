@@ -1,33 +1,10 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import path from 'node:path';
-import url from 'node:url';
-
-if (!process.env.DISABLE_SYSTEM_FONTS_LOAD) {
-    process.env.DISABLE_SYSTEM_FONTS_LOAD = '1';
-}
-
-const { GlobalFonts } = await import('@napi-rs/canvas');
-
-const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
-
-const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
-const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
-
-const hasNoto = GlobalFonts.families?.some((entry) =>
-    typeof entry?.family === 'string' && entry.family.toLowerCase().includes('noto sans'),
-);
-
-if (!hasNoto) {
-    GlobalFonts.registerFromPath(regularFontPath);
-    GlobalFonts.registerFromPath(boldFontPath);
-}
-
-const FONT_FAMILY = 'Noto Sans';
 
 // Chart setup for Discord embeds
 const WIDTH = 1200;
 const HEIGHT = 900;
+const FONT_FAMILY = 'sans-serif';
 
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
