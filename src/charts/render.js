@@ -1,5 +1,6 @@
 // src/charts/render.js
-import { ChartJSNodeCanvas, GlobalFonts } from 'chartjs-node-canvas';
+import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { GlobalFonts } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
 
 const WIDTH = 1200;
