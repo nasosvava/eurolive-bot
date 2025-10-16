@@ -1,17 +1,27 @@
 // src/charts/render.js
-import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { ChartJSNodeCanvas, GlobalFonts } from 'chartjs-node-canvas';
+import { fileURLToPath } from 'node:url';
 
 const WIDTH = 1200;
 const HEIGHT = 900;
-const FONT_FAMILY = 'sans-serif';
+const FONT_FAMILY = 'Noto Sans';
+
+// Ensure Noto Sans is available when running headless (production containers might lack system fonts).
+const regularFontPath = fileURLToPath(new URL('../../assets/fonts/NotoSans-Regular.ttf', import.meta.url));
+const boldFontPath = fileURLToPath(new URL('../../assets/fonts/NotoSans-Bold.ttf', import.meta.url));
+
+if (!GlobalFonts.has(FONT_FAMILY)) {
+    GlobalFonts.registerFromPath(regularFontPath);
+    GlobalFonts.registerFromPath(boldFontPath);
+}
 
 const GREEK_PAIRS = [
     ['?', 'A'], ['?', 'A'], ['?', 'B'], ['G', 'G'], ['?', 'D'], ['?', 'E'], ['?', 'E'], ['?', 'Z'], ['?', 'I'],
     ['?', 'I'], ['T', 'TH'], ['?', 'I'], ['?', 'I'], ['?', 'K'], ['?', 'L'], ['?', 'M'], ['?', 'N'], ['?', 'X'],
     ['?', 'O'], ['?', 'O'], ['?', 'P'], ['?', 'R'], ['S', 'S'], ['?', 'T'], ['?', 'Y'], ['?', 'Y'], ['F', 'F'],
     ['?', 'CH'], ['?', 'PS'], ['O', 'O'], ['?', 'O'],
-    ['a', 'a'], ['?', 'a'], ['ß', 'b'], ['?', 'g'], ['d', 'd'], ['e', 'e'], ['?', 'e'], ['?', 'z'], ['?', 'i'],
-    ['?', 'i'], ['?', 'th'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'k'], ['?', 'l'], ['µ', 'm'],
+    ['a', 'a'], ['?', 'a'], ['ï¿½', 'b'], ['?', 'g'], ['d', 'd'], ['e', 'e'], ['?', 'e'], ['?', 'z'], ['?', 'i'],
+    ['?', 'i'], ['?', 'th'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'k'], ['?', 'l'], ['ï¿½', 'm'],
     ['?', 'n'], ['?', 'x'], ['?', 'o'], ['?', 'o'], ['p', 'p'], ['?', 'r'], ['?', 's'], ['s', 's'], ['t', 't'],
     ['?', 'y'], ['?', 'y'], ['?', 'y'], ['?', 'y'], ['f', 'f'], ['?', 'ch'], ['?', 'ps'], ['?', 'o'], ['?', 'o']
 ];
