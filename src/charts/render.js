@@ -14,11 +14,12 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
 const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
 
-const FONT_FAMILY = 'Noto Sans';
-const BOLD_FONT_FAMILY = 'Noto Sans Bold';
+if (!GlobalFonts.families?.some((entry) => entry.family === 'Noto Sans')) {
+    GlobalFonts.registerFromPath(regularFontPath);
+    GlobalFonts.registerFromPath(boldFontPath);
+}
 
-GlobalFonts.registerFromPath(regularFontPath, FONT_FAMILY);
-GlobalFonts.registerFromPath(boldFontPath, BOLD_FONT_FAMILY);
+const FONT_FAMILY = 'Noto Sans';
 
 // Chart setup for Discord embeds
 const WIDTH = 1200;
@@ -43,19 +44,19 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         legend: {
             display: Boolean(xLabel),
             labels: {
-                font: { family: FONT_FAMILY, size: 14, weight: 'bold' },
+                font: { family: FONT_FAMILY, size: 14, weight: '600' },
                 color: '#1f1f1f',
             },
         },
         title: {
             display: Boolean(title),
             text: title,
-            font: { family: BOLD_FONT_FAMILY, size: 20, weight: 'bold' },
+            font: { family: FONT_FAMILY, size: 20, weight: '700' },
             color: '#1f1f1f',
         },
         tooltip: {
             bodyFont: { family: FONT_FAMILY, size: 14 },
-            titleFont: { family: BOLD_FONT_FAMILY, size: 16 },
+            titleFont: { family: FONT_FAMILY, size: 16, weight: '700' },
         },
     },
     scales: {
@@ -66,7 +67,7 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
                 color: '#1f1f1f',
             },
             title: xLabel
-                ? { text: xLabel, display: true, font: { family: FONT_FAMILY, size: 14, weight: 'bold' } }
+                ? { text: xLabel, display: true, font: { family: FONT_FAMILY, size: 14, weight: '600' } }
                 : undefined,
         },
         y: {
