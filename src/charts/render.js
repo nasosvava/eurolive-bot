@@ -1,33 +1,15 @@
 // src/charts/render.js
-import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { ChartJSNodeCanvas, registerFont } from 'chartjs-node-canvas';
 import path from 'node:path';
 import url from 'node:url';
 
-if (!process.env.DISABLE_SYSTEM_FONTS_LOAD) {
-    process.env.DISABLE_SYSTEM_FONTS_LOAD = '1';
-}
-
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
-
-const fontConfigDir = path.join(__dirname, '../../assets/fontconfig');
-const fontConfigFile = path.join(fontConfigDir, 'fonts.conf');
-
-if (!process.env.FONTCONFIG_PATH) {
-    process.env.FONTCONFIG_PATH = fontConfigDir;
-}
-if (!process.env.FONTCONFIG_FILE) {
-    process.env.FONTCONFIG_FILE = fontConfigFile;
-}
-
-const { GlobalFonts } = await import('@napi-rs/canvas');
 
 const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
 const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
 
-if (!GlobalFonts.families?.some((entry) => entry.family === 'Noto Sans')) {
-    GlobalFonts.registerFromPath(regularFontPath);
-    GlobalFonts.registerFromPath(boldFontPath);
-}
+registerFont(regularFontPath, { family: 'Noto Sans', weight: 'normal' });
+registerFont(boldFontPath, { family: 'Noto Sans', weight: 'bold' });
 
 const FONT_FAMILY = 'Noto Sans';
 
