@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────
+# Node / Package managers
+# ─────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+# If you prefer keeping a lockfile, delete the line above and commit exactly one lockfile.
+
+# ─────────────────────────────────────────
+# Builds / Bundles / Transpiled output
+# ─────────────────────────────────────────
+dist/
+build/
+.out/
+.esbuild/
+.rollup.cache/
+.parcel-cache/
+.next/
+.nuxt/
+
+# ─────────────────────────────────────────
+# Testing / Coverage
+# ─────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─────────────────────────────────────────
+# Lint / Type check caches
+# ─────────────────────────────────────────
+.eslintcache
+.stylelintcache
+.tscache/
+tsconfig.tsbuildinfo
+
+# ─────────────────────────────────────────
+# Runtime data / Temp
+# ─────────────────────────────────────────
+tmp/
+temp/
+*.log
+logs/
+pids/
+*.pid
+*.pid.lock
+
+# Charts or generated images (attachments for embeds)
+charts/
+*.png
+*.jpg
+
+# ─────────────────────────────────────────
+# Environment / Secrets
+# ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─────────────────────────────────────────
+# OS / Editor junk
+# ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.Spotlight-V100
+.Trashes
+
+# Editor/project files (uncomment if you don't want them committed)
+# .vscode/
+.idea/
+# *.iml
+
+# ─────────────────────────────────────────
+# Docker / Misc (optional)
+# ─────────────────────────────────────────
+docker-compose.override.yml
