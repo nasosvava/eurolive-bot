@@ -7,9 +7,19 @@ if (!process.env.DISABLE_SYSTEM_FONTS_LOAD) {
     process.env.DISABLE_SYSTEM_FONTS_LOAD = '1';
 }
 
-const { GlobalFonts } = await import('@napi-rs/canvas');
-
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+
+const fontConfigDir = path.join(__dirname, '../../assets/fontconfig');
+const fontConfigFile = path.join(fontConfigDir, 'fonts.conf');
+
+if (!process.env.FONTCONFIG_PATH) {
+    process.env.FONTCONFIG_PATH = fontConfigDir;
+}
+if (!process.env.FONTCONFIG_FILE) {
+    process.env.FONTCONFIG_FILE = fontConfigFile;
+}
+
+const { GlobalFonts } = await import('@napi-rs/canvas');
 
 const regularFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Regular.ttf');
 const boldFontPath = path.join(__dirname, '../../assets/fonts/NotoSans-Bold.ttf');
