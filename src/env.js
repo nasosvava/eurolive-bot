@@ -1,6 +1,17 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+function required(name) {
+    const v = process.env[name];
+    if (!v || !v.trim()) throw new Error(`Missing required env var: ${name}`);
+    return v.trim();
+}
+
+function optional(name, def) {
+    const v = process.env[name];
+    return v && v.trim().length ? v.trim() : def;
+}
+
 // Discord bot
 export const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 export const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
