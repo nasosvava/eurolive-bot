@@ -12,11 +12,10 @@ const HEIGHT = 900;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// We register everything under this alias (no spaces, no punctuation),
-// then tell Chart.js to use this exact alias.
+// We register under a space-free alias to avoid any CSS parsing quirks.
 const FAMILY_ALIAS = 'dejavusanslocal';
 
-// Bundled DejaVu (has Greek)
+// Bundled fonts (Greek-capable)
 const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
 const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 
@@ -24,63 +23,87 @@ const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 const NOTO_REG = path.join(fontsDir, 'NotoSans-Regular.ttf');
 const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 
-// ---------- helpers ----------
-function exists(p) {
-    try { return fs.existsSync(p); } catch { return false; }
-}
+// ---------- encoding repair (mojibake guard) ----------
+const GREEK_RANGES = [
+    [0x0370, 0x03FF], // Greek & Coptic
+    [0x1F00, 0x1FFF], // Greek Extended
+];
 
-function registerIfPresent(p, alias) {
-    if (exists(p)) {
-        GlobalFonts.registerFromPath(p, alias);
-        return true;
+function countGreek(str) {
+    let n = 0;
+    for (const ch of String(str)) {
+        const cp = ch.codePointAt(0);
+        if (cp == null) continue;
+        for (const [lo, hi] of GREEK_RANGES) {
+            if (cp >= lo && cp <= hi) { n++; break; }
+        }
     }
-    return false;
+    return n;
 }
 
-function bootFonts() {
+// reinterpret each char’s low byte as Latin-1 (works for many single-byte mojibake cases)
+function latin1RoundTrip(str) {
+    const s = String(str);
+    const buf = Buffer.allocUnsafe(s.length);
+    for (let i = 0; i < s.length; i++) buf[i] = s.charCodeAt(i) & 0xff;
+    return buf.toString('latin1');
+}
+
+function repairGreek(text) {
+    const s = String(text ?? '').replace(/\s+/g, ' ').trim();
+    if (!s) return s;
+    const greek0 = countGreek(s);
+    const hasFFFD = s.includes('\uFFFD');
+    const nonAscii = [...s].some(c => c.charCodeAt(0) > 0x7f);
+
+    if (!hasFFFD && greek0 > 0) return s.normalize('NFC');
+    if (!hasFFFD && !nonAscii) return s; // plain ASCII—leave it
+
+    const repaired = latin1RoundTrip(s);
+    const greek1 = countGreek(repaired);
+    if (greek1 > greek0 || hasFFFD) return repaired.normalize('NFC');
+    return s.normalize('NFC');
+}
+
+function fixLabel(x) {
+    return repairGreek(x).replace(/[\u0000-\u001F\u007F]/g, '');
+}
+function fixLabels(arr = []) {
+    return (arr ?? []).map(fixLabel);
+}
+
+// ---------- font registration ----------
+function exists(p) { try { return fs.existsSync(p); } catch { return false; } }
+function registerIf(pathToTtf) {
+    if (!exists(pathToTtf)) return false;
+    GlobalFonts.registerFromPath(pathToTtf, FAMILY_ALIAS);
+    return true;
+}
+
+(function bootFonts() {
     const dirExists = exists(fontsDir);
     const list = dirExists ? fs.readdirSync(fontsDir) : [];
     console.log('[charts] fontsDir:', fontsDir, 'exists:', dirExists, 'files:', list);
 
-    let registered = false;
-
-    // 1) Prefer DejaVu
-    const r1 = registerIfPresent(DJV_REG, FAMILY_ALIAS);
-    const r2 = registerIfPresent(DJV_BOLD, FAMILY_ALIAS);
-    registered = r1 || r2;
-
-    // 2) Top up with Noto (same alias) if present
-    const r3 = registerIfPresent(NOTO_REG, FAMILY_ALIAS);
-    const r4 = registerIfPresent(NOTO_BOLD, FAMILY_ALIAS);
-    registered = registered || r3 || r4;
-
-    // Skia may still have a system font with our alias? (unlikely)
+    const used = {
+        dejavu: { reg: registerIf(DJV_REG), bold: registerIf(DJV_BOLD) },
+        noto:   { reg: registerIf(NOTO_REG), bold: registerIf(NOTO_BOLD) },
+    };
     const hasAlias = GlobalFonts.has(FAMILY_ALIAS);
+    console.log('[charts] registered alias "%s" ->', FAMILY_ALIAS, { ...used, hasAlias });
 
-    console.log(`[charts] registered alias "${FAMILY_ALIAS}" ->`, {
-        dejavu: { reg: r1, bold: r2 },
-        noto: { reg: r3, bold: r4 },
-        hasAlias,
-    });
-
-    if (!registered && !hasAlias) {
-        throw new Error(
-            `[charts] Could not register fonts under "${FAMILY_ALIAS}". ` +
-            `Ensure DejaVu/Noto TTFs exist in ${fontsDir}.`
-        );
+    if (!used.dejavu.reg && !used.dejavu.bold && !used.noto.reg && !used.noto.bold && !hasAlias) {
+        throw new Error(`[charts] Could not register fonts under "${FAMILY_ALIAS}". Ensure TTFs exist in ${fontsDir}.`);
     }
-}
+})();
 
-bootFonts();
-
-// ---------- chart factory (AFTER fonts) ----------
+// ---------- chart factory (create AFTER fonts) ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        // IMPORTANT: use the alias with no spaces
-        ChartJS.defaults.font.family = FAMILY_ALIAS;
+        ChartJS.defaults.font.family = FAMILY_ALIAS; // our alias, no spaces
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
@@ -101,7 +124,7 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         },
         title: {
             display: Boolean(title),
-            text: title ?? '',
+            text: fixLabel(title ?? ''),
             font: { family: FAMILY_ALIAS, size: 20, weight: 'bold' },
             color: '#1f1f1f',
         },
@@ -115,7 +138,7 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
             beginAtZero,
             ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
             title: xLabel
-                ? { text: xLabel, display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } }
+                ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } }
                 : undefined,
         },
         y: {
@@ -127,18 +150,24 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
 
 // ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
+    const safeLabels = fixLabels(labels);
+    if (process.env.DEBUG) {
+        const sample = safeLabels?.[0] ?? '';
+        console.log('[charts] label sample:', sample, [...sample].slice(0,8).map(c => c.codePointAt(0).toString(16)));
+    }
+
     const configuration = {
         type: 'bar',
         data: {
-            labels,
+            labels: safeLabels,
             datasets: [{
-                label: xLabel || '',
+                label: fixLabel(xLabel || ''),
                 data: values,
                 backgroundColor: Array.isArray(colors) && colors.length ? colors : '#cc2033',
                 borderRadius: 4,
             }],
         },
-        options: buildCommonOptions({ title, xLabel, indexAxis: 'y' }),
+        options: buildCommonOptions({ title, xLabel }),
     };
     return chart.renderToBuffer(configuration, 'image/png');
 }
@@ -147,10 +176,10 @@ export async function renderComparisonChart({ teamA, teamB, title, metricLabel }
     const configuration = {
         type: 'bar',
         data: {
-            labels: [metricLabel],
+            labels: fixLabels([metricLabel]),
             datasets: [
-                { label: teamA.teamName, data: [teamA.value], backgroundColor: teamA.color || '#cc2033', borderRadius: 6 },
-                { label: teamB.teamName, data: [teamB.value], backgroundColor: teamB.color || '#0c7b43', borderRadius: 6 },
+                { label: fixLabel(teamA.teamName), data: [teamA.value], backgroundColor: teamA.color || '#cc2033', borderRadius: 6 },
+                { label: fixLabel(teamB.teamName), data: [teamB.value], backgroundColor: teamB.color || '#0c7b43', borderRadius: 6 },
             ],
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
@@ -162,10 +191,10 @@ export async function renderMultiComparisonChart({ labels, teamA, teamB, title }
     const configuration = {
         type: 'bar',
         data: {
-            labels,
+            labels: fixLabels(labels),
             datasets: [
-                { label: teamA.label, data: teamA.values, backgroundColor: teamA.color || '#cc2033', borderRadius: 4 },
-                { label: teamB.label, data: teamB.values, backgroundColor: teamB.color || '#0c7b43', borderRadius: 4 },
+                { label: fixLabel(teamA.label), data: teamA.values, backgroundColor: teamA.color || '#cc2033', borderRadius: 4 },
+                { label: fixLabel(teamB.label), data: teamB.values, backgroundColor: teamB.color || '#0c7b43', borderRadius: 4 },
             ],
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
