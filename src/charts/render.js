@@ -14,15 +14,11 @@ if (typeof globalThis.devicePixelRatio === 'undefined') globalThis.devicePixelRa
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// canonical names (as inside the TTFs)
+// canonical names (as embedded in TTFs)
 const DJV_FAMILY = 'DejaVu Sans';
 const NOTO_FAMILY = 'Noto Sans';
-// your alias (no spaces)
+// local alias without spaces
 const LOCAL_ALIAS = 'dejavusanslocal';
-
-// family list we hand to Chart.js everywhere
-// quotes are fine; Skia’s CSS parser accepts comma separated family lists
-const FAMILY_LIST = `'${LOCAL_ALIAS}','${DJV_FAMILY}','${NOTO_FAMILY}',sans-serif`;
 
 // font files
 const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
@@ -33,7 +29,7 @@ const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 // ---------- mojibake guard ----------
 const GREEK_RANGES = [[0x0370,0x03ff],[0x1f00,0x1fff]];
 const countGreek = s => { let n=0; for (const ch of String(s)) { const cp=ch.codePointAt(0); if (cp==null) continue; for (const [lo,hi] of GREEK_RANGES) if (cp>=lo&&cp<=hi){n++;break;} } return n; };
-const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(0+i)&0xff; return b.toString('latin1'); };
+const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(i)&0xff; return b.toString('latin1'); };
 function repairGreek(text){
     const s=String(text??'').replace(/\s+/g,' ').trim(); if(!s) return s;
     const g0=countGreek(s), hasFFFD=s.includes('\uFFFD'), nonAscii=[...s].some(c=>c.charCodeAt(0)>0x7f);
@@ -44,7 +40,7 @@ function repairGreek(text){
 const fixLabel = x => repairGreek(x).replace(/[\u0000-\u001F\u007F]/g,'');
 const fixLabels = a => (a??[]).map(fixLabel);
 
-// ---------- register fonts under multiple names ----------
+// ---------- register fonts under multiple family names ----------
 const exists = p => { try { return fs.existsSync(p); } catch { return false; } };
 const reg = (file, family) => { if (exists(file)) GlobalFonts.registerFromPath(file, family); };
 
@@ -58,7 +54,7 @@ const reg = (file, family) => { if (exists(file)) GlobalFonts.registerFromPath(f
     reg(DJV_REG, LOCAL_ALIAS);
     reg(DJV_BOLD, LOCAL_ALIAS);
 
-    // Noto (fallback)
+    // Noto fallback
     reg(NOTO_REG, NOTO_FAMILY);
     reg(NOTO_BOLD, NOTO_FAMILY);
     reg(NOTO_REG, LOCAL_ALIAS);
@@ -69,10 +65,19 @@ const reg = (file, family) => { if (exists(file)) GlobalFonts.registerFromPath(f
     console.log('[charts] GlobalFonts.has Noto?', NOTO_FAMILY, GlobalFonts.has(NOTO_FAMILY));
 })();
 
-// ---------- Chart.js defaults (NO ctx.font plugins) ----------
-Chart.defaults.font.family = FAMILY_LIST; // list, not a single token
-Chart.defaults.font.size = 14;
+// ---------- Chart.js defaults as OBJECT (never a string) ----------
+Chart.defaults.font = {
+    family: LOCAL_ALIAS, // can resolve to DejaVu or Noto we registered
+    size: 14,
+    style: 'normal',
+    weight: '400',
+    lineHeight: 1.2
+};
 Chart.defaults.color = '#1f1f1f';
+
+function fontObj(size=12, weight='normal'){
+    return { family: LOCAL_ALIAS, size, style: 'normal', weight };
+}
 
 function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } = {}) {
     return {
@@ -82,26 +87,26 @@ function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } =
         plugins: {
             legend: {
                 display: Boolean(xLabel),
-                labels: { font: { family: FAMILY_LIST, size: 14, weight: 'bold' }, color: '#1f1f1f' },
+                labels: { font: fontObj(14, '700'), color: '#1f1f1f' },
             },
             title: {
                 display: Boolean(title),
                 text: fixLabel(title ?? ''),
-                font: { family: FAMILY_LIST, size: 20, weight: 'bold' },
+                font: fontObj(20, '700'),
                 color: '#1f1f1f',
             },
             tooltip: {
-                bodyFont: { family: FAMILY_LIST, size: 14 },
-                titleFont: { family: FAMILY_LIST, size: 16, weight: 'bold' },
+                bodyFont: fontObj(14, '400'),
+                titleFont: fontObj(16, '700'),
             },
         },
         scales: {
             x: {
                 beginAtZero,
-                ticks: { font: { family: FAMILY_LIST, size: 12 }, color: '#1f1f1f' },
-                title: xLabel ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_LIST, size: 14, weight: 'bold' } } : undefined,
+                ticks: { font: fontObj(12, '400'), color: '#1f1f1f' },
+                title: xLabel ? { text: fixLabel(xLabel), display: true, font: fontObj(14, '700') } : undefined,
             },
-            y: { beginAtZero, ticks: { font: { family: FAMILY_LIST, size: 12 }, color: '#1f1f1f' } },
+            y: { beginAtZero, ticks: { font: fontObj(12, '400'), color: '#1f1f1f' } },
         },
     };
 }
@@ -109,6 +114,9 @@ function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } =
 async function renderChartToBuffer(cfg){
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext('2d');
+
+    // seed a valid CSS font on the context (protects against any plugin assigning a bare family)
+    ctx.font = `14px ${LOCAL_ALIAS}`;
 
     // white background
     ctx.fillStyle = '#fff';
