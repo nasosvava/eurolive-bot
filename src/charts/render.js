@@ -8,48 +8,96 @@ import fs from 'node:fs';
 const WIDTH = 1200;
 const HEIGHT = 900;
 
-// -------- paths --------
+// ---------- paths ----------
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// Use DejaVu Sans because it includes Greek
-const FAMILY = 'DejaVu Sans';
-const REG = path.join(fontsDir, 'DejaVuSans.ttf');
-const BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
+// Prefer this family across the board (has Greek glyphs)
+const PREFERRED_FAMILY = 'DejaVu Sans';
 
-// -------- guards --------
-for (const p of [fontsDir, REG, BOLD]) {
-    if (!fs.existsSync(p)) {
-        throw new Error(`[charts] Missing required font path: ${p}`);
+// Files we expect to ship with the repo
+const BUNDLED = {
+    regular: path.join(fontsDir, 'DejaVuSans.ttf'),
+    bold: path.join(fontsDir, 'DejaVuSans-Bold.ttf'),
+};
+
+// Optional alternates you might add later (full Unicode Noto)
+const ALTS = [
+    { family: 'Noto Sans', regular: path.join(fontsDir, 'NotoSans-Regular.ttf'), bold: path.join(fontsDir, 'NotoSans-Bold.ttf') },
+];
+
+// ---------- helpers ----------
+function fileExists(p) {
+    try { return fs.existsSync(p); } catch { return false; }
+}
+
+function registerPair({ family, regular, bold }) {
+    let ok = false;
+    if (fileExists(regular)) {
+        GlobalFonts.registerFromPath(regular, family);
+        ok = true;
     }
+    if (fileExists(bold)) {
+        GlobalFonts.registerFromPath(bold, family);
+        ok = true;
+    }
+    return ok;
 }
 
-// -------- register fonts (correct API for file paths) --------
-GlobalFonts.registerFromPath(REG, FAMILY);
-GlobalFonts.registerFromPath(BOLD, FAMILY);
+function registerFonts() {
+    // Debug: show what the container actually has
+    const exists = fileExists(fontsDir);
+    const list = exists ? fs.readdirSync(fontsDir) : [];
+    console.log('[charts] fontsDir:', fontsDir, 'exists:', exists, 'files:', list);
 
-// Optional debug
-if (process.env.DEBUG) {
-    console.log('[charts] fonts dir:', fontsDir);
-    console.log('[charts] files:', fs.readdirSync(fontsDir));
-    console.log('[charts] has family:', FAMILY, GlobalFonts.has(FAMILY));
-    console.log('[charts] families sample:', GlobalFonts.families?.slice?.(0, 20));
+    // 1) Try bundled DejaVu first
+    let family = PREFERRED_FAMILY;
+    let registered = registerPair({ family, ...BUNDLED });
+
+    // 2) If not found, try bundled alternates (e.g., Noto Sans full)
+    if (!registered) {
+        for (const alt of ALTS) {
+            if (registerPair(alt)) {
+                family = alt.family;
+                registered = true;
+                break;
+            }
+        }
+    }
+
+    // 3) If still not registered, hope a system font is present (Nixpacks: dejavu_fonts / noto-fonts)
+    //    We can't "register" system fonts directly, but we can check if the family exists.
+    const hasSystem = GlobalFonts.has(family);
+
+    console.log(`[charts] using family: "${family}", registeredBundled=${registered}, hasSystem=${hasSystem}`);
+
+    if (!registered && !hasSystem) {
+        // Be explicit so it's obvious in logs why tofu would appear
+        throw new Error(
+            `[charts] No usable font family found. Ship bundled TTFs at ${fontsDir} ` +
+            `(DejaVuSans.ttf, DejaVuSans-Bold.ttf) or install system fonts (dejavu_fonts / noto-fonts).`
+        );
+    }
+    return family;
 }
 
-// -------- canvas factory --------
+// ---------- register BEFORE creating canvas ----------
+const FAMILY = registerFonts();
+
+// ---------- chart factory ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        // Use ONE exact family (no stacks)
+        // IMPORTANT: single exact family name — avoids Skia font matching issues
         ChartJS.defaults.font.family = FAMILY;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
 });
 
-// -------- shared options --------
+// ---------- shared options ----------
 const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
     indexAxis,
     responsive: false,
@@ -88,12 +136,12 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
     },
 });
 
-// -------- public renderers --------
+// ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const configuration = {
         type: 'bar',
         data: {
-            labels, // keep Greek as-is; DejaVu Sans handles glyphs
+            labels, // keep text as-is; chosen family supports Greek
             datasets: [{
                 label: xLabel || '',
                 data: values,
