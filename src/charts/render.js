@@ -151,10 +151,9 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
 // ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const safeLabels = fixLabels(labels);
-    if (process.env.DEBUG) {
-        const sample = safeLabels?.[0] ?? '';
-        console.log('[charts] label sample:', sample, [...sample].slice(0,8).map(c => c.codePointAt(0).toString(16)));
-    }
+    const sample = safeLabels?.[0] ?? '';
+    const cps = [...sample].map(c => c.codePointAt(0).toString(16));
+    console.log('[charts] sample label:', JSON.stringify(sample), cps.slice(0, 16));
 
     const configuration = {
         type: 'bar',
