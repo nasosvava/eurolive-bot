@@ -1,6 +1,7 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import { GlobalFonts } from '@napi-rs/canvas';
+// IMPORTANT: pull all primitives from @napi-rs/canvas and inject them!
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ const HEIGHT = 900;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// We register under a space-free alias to avoid any CSS parsing quirks.
+// Use a space-free alias so CSS parsing quirks can’t bite us
 const FAMILY_ALIAS = 'dejavusanslocal';
 
 // Bundled fonts (Greek-capable)
@@ -23,62 +24,38 @@ const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 const NOTO_REG = path.join(fontsDir, 'NotoSans-Regular.ttf');
 const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 
-// ---------- encoding repair (mojibake guard) ----------
+// ---------- encoding guard (lightweight) ----------
 const GREEK_RANGES = [
-    [0x0370, 0x03FF], // Greek & Coptic
-    [0x1F00, 0x1FFF], // Greek Extended
+    [0x0370, 0x03ff],
+    [0x1f00, 0x1fff],
 ];
-
-function countGreek(str) {
-    let n = 0;
-    for (const ch of String(str)) {
-        const cp = ch.codePointAt(0);
-        if (cp == null) continue;
-        for (const [lo, hi] of GREEK_RANGES) {
-            if (cp >= lo && cp <= hi) { n++; break; }
-        }
-    }
-    return n;
-}
-
-// reinterpret each char’s low byte as Latin-1 (works for many single-byte mojibake cases)
-function latin1RoundTrip(str) {
-    const s = String(str);
-    const buf = Buffer.allocUnsafe(s.length);
-    for (let i = 0; i < s.length; i++) buf[i] = s.charCodeAt(i) & 0xff;
+const countGreek = (s) => {
+    let n = 0; for (const ch of String(s)) {
+        const cp = ch.codePointAt(0); if (cp == null) continue;
+        for (const [lo, hi] of GREEK_RANGES) { if (cp >= lo && cp <= hi) { n++; break; } }
+    } return n;
+};
+const latin1RoundTrip = (s) => {
+    const t = String(s); const buf = Buffer.allocUnsafe(t.length);
+    for (let i = 0; i < t.length; i++) buf[i] = t.charCodeAt(i) & 0xff;
     return buf.toString('latin1');
-}
-
+};
 function repairGreek(text) {
     const s = String(text ?? '').replace(/\s+/g, ' ').trim();
     if (!s) return s;
-    const greek0 = countGreek(s);
+    const g0 = countGreek(s);
     const hasFFFD = s.includes('\uFFFD');
     const nonAscii = [...s].some(c => c.charCodeAt(0) > 0x7f);
-
-    if (!hasFFFD && greek0 > 0) return s.normalize('NFC');
-    if (!hasFFFD && !nonAscii) return s; // plain ASCII—leave it
-
-    const repaired = latin1RoundTrip(s);
-    const greek1 = countGreek(repaired);
-    if (greek1 > greek0 || hasFFFD) return repaired.normalize('NFC');
-    return s.normalize('NFC');
+    if (!hasFFFD && (g0 > 0 || !nonAscii)) return s.normalize('NFC');
+    const r = latin1RoundTrip(s), g1 = countGreek(r);
+    return (g1 > g0 || hasFFFD) ? r.normalize('NFC') : s.normalize('NFC');
 }
-
-function fixLabel(x) {
-    return repairGreek(x).replace(/[\u0000-\u001F\u007F]/g, '');
-}
-function fixLabels(arr = []) {
-    return (arr ?? []).map(fixLabel);
-}
+const fixLabel = (x) => repairGreek(x).replace(/[\u0000-\u001F\u007F]/g, '');
+const fixLabels = (a = []) => (a ?? []).map(fixLabel);
 
 // ---------- font registration ----------
-function exists(p) { try { return fs.existsSync(p); } catch { return false; } }
-function registerIf(pathToTtf) {
-    if (!exists(pathToTtf)) return false;
-    GlobalFonts.registerFromPath(pathToTtf, FAMILY_ALIAS);
-    return true;
-}
+const exists = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+const registerIf = (p) => exists(p) && (GlobalFonts.registerFromPath(p, FAMILY_ALIAS), true);
 
 (function bootFonts() {
     const dirExists = exists(fontsDir);
@@ -97,11 +74,13 @@ function registerIf(pathToTtf) {
     }
 })();
 
-// ---------- chart factory (create AFTER fonts) ----------
+// ---------- force @napi-rs/canvas backend ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
+    // Inject @napi-rs/canvas so we DO NOT fall back to node-canvas:
+    canvas: { type: 'napi', createCanvas, loadImage },
     chartCallback: (ChartJS) => {
         ChartJS.defaults.font.family = FAMILY_ALIAS; // our alias, no spaces
         ChartJS.defaults.font.size = 14;
@@ -151,9 +130,9 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
 // ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const safeLabels = fixLabels(labels);
-    const sample = safeLabels?.[0] ?? '';
-    const cps = [...sample].map(c => c.codePointAt(0).toString(16));
-    console.log('[charts] sample label:', JSON.stringify(sample), cps.slice(0, 16));
+        const sample = safeLabels?.[0] ?? '';
+        console.log('[charts] sample label:', JSON.stringify(sample),
+            [...sample].slice(0, 16).map(c => c.codePointAt(0).toString(16)));
 
     const configuration = {
         type: 'bar',
@@ -166,7 +145,7 @@ export async function renderHorizontalBar({ labels, values, title, xLabel, color
                 borderRadius: 4,
             }],
         },
-        options: buildCommonOptions({ title, xLabel }),
+        options: buildCommonOptions({ title, xLabel, indexAxis: 'y' }),
     };
     return chart.renderToBuffer(configuration, 'image/png');
 }
