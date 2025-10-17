@@ -22,9 +22,6 @@ app
     .on('error', (err) => {
         console.error('[web] Failed to bind HTTP server:', err);
     });
-// after you create `const app = express();`
-import { mountRoutes } from './web/routes.js';
-mountRoutes(app);
 
 
 // --- Discord bot bootstrap (don’t crash if token is wrong) ---

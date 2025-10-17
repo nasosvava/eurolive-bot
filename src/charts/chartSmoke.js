@@ -7,7 +7,7 @@ export async function selfTestChartText() {
 
     const chart = new ChartJSNodeCanvas({
         width, height, backgroundColour: 'white',
-        // force Skia
+        // FORCE Skia backend:
         canvas: { createCanvas, loadImage },
         chartCallback: (ChartJS) => {
             ChartJS.defaults.font.family = 'dejavusanslocal';
@@ -20,7 +20,12 @@ export async function selfTestChartText() {
         type: 'bar',
         data: {
             labels: ['Hapoel Tel Aviv', 'Παναθηναϊκός', 'Ολυμπιακός'],
-            datasets: [{ label: 'Δοκιμή / Test', data: [10, 12, 8], backgroundColor: '#0c7b43', borderRadius: 6 }]
+            datasets: [{
+                label: 'Δοκιμή / Test',
+                data: [10, 12, 8],
+                backgroundColor: '#0c7b43',
+                borderRadius: 6
+            }]
         },
         options: {
             responsive: false,
@@ -30,7 +35,7 @@ export async function selfTestChartText() {
             },
             scales: {
                 x: { ticks: { font: { family: 'dejavusanslocal', size: 12 } } },
-                y: { ticks: { font: { family: 'dejavusanslocal', size: 12 } }, beginAtZero: true }
+                y: { beginAtZero: true, ticks: { font: { family: 'dejavusanslocal', size: 12 } } }
             }
         }
     };

@@ -24,6 +24,7 @@ import {
 } from '../handlers/players.js';
 import { handleAutocomplete as teamsAuto } from '../handlers/teams/autocomplete.js';
 import { leagueInsight } from '../handlers/threeSteps/leagueInsight.js';
+import {chartTest, fontTest} from "../handlers/debug.js";
 
 
 
@@ -92,6 +93,8 @@ export function wireInteractions(client) {
             if (interaction.commandName === 'players-top-minutes') return wrap(playersTopMinutes, interaction);
             if (interaction.commandName === 'players-ratings') return wrap(playersRatings, interaction);
             if (interaction.commandName === 'player-insight') return wrap(playerInsight, interaction);
+            if (interaction.commandName === 'font-test') return wrap(fontTest, interaction);
+            if (interaction.commandName === 'chart-test') return wrap(chartTest, interaction);
 
         } catch (err) {
             console.error('interaction error:', err);

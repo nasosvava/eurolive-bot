@@ -40,4 +40,12 @@ export const coreCommands = [
             { type: 4, name: 'limit', description: 'How many recent games to show (1–20, default 10)', required: false, min_value: 1, max_value: 20 },
         ],
     },
+    {
+        name: 'font-test',
+        description: 'Internal: draw text directly with Skia to verify font',
+    },
+    {
+        name: 'chart-test',
+        description: 'Internal: render a Chart.js bar with Greek labels',
+    }
 ];
