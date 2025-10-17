@@ -7,17 +7,16 @@ import Chart from 'chart.js/auto';
 const WIDTH = 1200;
 const HEIGHT = 900;
 
-// Chart.js may read this
 if (typeof globalThis.devicePixelRatio === 'undefined') globalThis.devicePixelRatio = 1;
 
 // ---------- paths ----------
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// canonical names (as embedded in TTFs)
+// canonical names (as embedded in the TTFs)
 const DJV_FAMILY = 'DejaVu Sans';
 const NOTO_FAMILY = 'Noto Sans';
-// local alias without spaces
+// local alias (no spaces)
 const LOCAL_ALIAS = 'dejavusanslocal';
 
 // font files
@@ -29,7 +28,7 @@ const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 // ---------- mojibake guard ----------
 const GREEK_RANGES = [[0x0370,0x03ff],[0x1f00,0x1fff]];
 const countGreek = s => { let n=0; for (const ch of String(s)) { const cp=ch.codePointAt(0); if (cp==null) continue; for (const [lo,hi] of GREEK_RANGES) if (cp>=lo&&cp<=hi){n++;break;} } return n; };
-const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(i)&0xff; return b.toString('latin1'); };
+const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(0+i)&0xff; return b.toString('latin1'); };
 function repairGreek(text){
     const s=String(text??'').replace(/\s+/g,' ').trim(); if(!s) return s;
     const g0=countGreek(s), hasFFFD=s.includes('\uFFFD'), nonAscii=[...s].some(c=>c.charCodeAt(0)>0x7f);
@@ -65,20 +64,53 @@ const reg = (file, family) => { if (exists(file)) GlobalFonts.registerFromPath(f
     console.log('[charts] GlobalFonts.has Noto?', NOTO_FAMILY, GlobalFonts.has(NOTO_FAMILY));
 })();
 
-// ---------- Chart.js defaults as OBJECT (never a string) ----------
+// ---------- Chart.js defaults as OBJECT (never a raw string) ----------
 Chart.defaults.font = {
-    family: LOCAL_ALIAS, // can resolve to DejaVu or Noto we registered
+    family: LOCAL_ALIAS,
     size: 14,
     style: 'normal',
     weight: '400',
-    lineHeight: 1.2
+    lineHeight: 1.2,
 };
 Chart.defaults.color = '#1f1f1f';
 
-function fontObj(size=12, weight='normal'){
-    return { family: LOCAL_ALIAS, size, style: 'normal', weight };
+const fontObj = (size=12, weight='normal') =>
+    ({ family: LOCAL_ALIAS, size, style: 'normal', weight });
+
+// ---------- guard any invalid ctx.font assignment ----------
+function guardContextFont(ctx, fallbackPx = 14, fallbackFamily = LOCAL_ALIAS) {
+    const desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ctx), 'font');
+    if (!desc || typeof desc.set !== 'function' || typeof desc.get !== 'function') return;
+
+    const rawGet = desc.get.bind(ctx);
+    const rawSet = desc.set.bind(ctx);
+
+    Object.defineProperty(ctx, 'font', {
+        configurable: true,
+        enumerable: true,
+        get: rawGet,
+        set(value) {
+            try {
+                // If someone passes just a family (e.g. "dejavusanslocal") or anything without "px",
+                // coerce to a valid CSS shorthand: "normal 14px dejavusanslocal"
+                if (typeof value === 'string') {
+                    const v = value.trim();
+                    if (!/(\d+)px/.test(v)) {
+                        const safe = `normal ${fallbackPx}px ${fallbackFamily}`;
+                        // console.log('[charts] font guard coerced:', JSON.stringify(v), '->', JSON.stringify(safe));
+                        return rawSet(safe);
+                    }
+                }
+            } catch {}
+            return rawSet(value);
+        }
+    });
+
+    // seed a valid font right now too
+    ctx.font = `normal ${fallbackPx}px ${fallbackFamily}`;
 }
 
+// ---------- shared options ----------
 function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } = {}) {
     return {
         indexAxis,
@@ -115,12 +147,15 @@ async function renderChartToBuffer(cfg){
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext('2d');
 
-    // seed a valid CSS font on the context (protects against any plugin assigning a bare family)
-    ctx.font = `14px ${LOCAL_ALIAS}`;
+    // Guard any future invalid ctx.font assignments (from Chart.js internals or plugins)
+    guardContextFont(ctx, 14, LOCAL_ALIAS);
 
     // white background
     ctx.fillStyle = '#fff';
     ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+    // Debug: show the font string we will start with
+    // console.log('[charts] ctx.font at start:', ctx.font);
 
     const chart = new Chart(ctx, cfg);
     chart.update();
