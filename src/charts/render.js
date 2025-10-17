@@ -1,4 +1,3 @@
-// src/charts/render.js
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -8,14 +7,24 @@ import Chart from 'chart.js/auto';
 const WIDTH = 1200;
 const HEIGHT = 900;
 
+// Chart.js may read this
 if (typeof globalThis.devicePixelRatio === 'undefined') globalThis.devicePixelRatio = 1;
 
 // ---------- paths ----------
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
-const FAMILY_ALIAS = 'dejavusanslocal';
 
-// fonts
+// canonical names (as inside the TTFs)
+const DJV_FAMILY = 'DejaVu Sans';
+const NOTO_FAMILY = 'Noto Sans';
+// your alias (no spaces)
+const LOCAL_ALIAS = 'dejavusanslocal';
+
+// family list we hand to Chart.js everywhere
+// quotes are fine; Skia’s CSS parser accepts comma separated family lists
+const FAMILY_LIST = `'${LOCAL_ALIAS}','${DJV_FAMILY}','${NOTO_FAMILY}',sans-serif`;
+
+// font files
 const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
 const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 const NOTO_REG = path.join(fontsDir, 'NotoSans-Regular.ttf');
@@ -24,7 +33,7 @@ const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 // ---------- mojibake guard ----------
 const GREEK_RANGES = [[0x0370,0x03ff],[0x1f00,0x1fff]];
 const countGreek = s => { let n=0; for (const ch of String(s)) { const cp=ch.codePointAt(0); if (cp==null) continue; for (const [lo,hi] of GREEK_RANGES) if (cp>=lo&&cp<=hi){n++;break;} } return n; };
-const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(i)&0xff; return b.toString('latin1'); };
+const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(0+i)&0xff; return b.toString('latin1'); };
 function repairGreek(text){
     const s=String(text??'').replace(/\s+/g,' ').trim(); if(!s) return s;
     const g0=countGreek(s), hasFFFD=s.includes('\uFFFD'), nonAscii=[...s].some(c=>c.charCodeAt(0)>0x7f);
@@ -35,26 +44,33 @@ function repairGreek(text){
 const fixLabel = x => repairGreek(x).replace(/[\u0000-\u001F\u007F]/g,'');
 const fixLabels = a => (a??[]).map(fixLabel);
 
-// ---------- fonts ----------
+// ---------- register fonts under multiple names ----------
 const exists = p => { try { return fs.existsSync(p); } catch { return false; } };
-const registerIf = p => exists(p) && (GlobalFonts.registerFromPath(p, FAMILY_ALIAS), true);
+const reg = (file, family) => { if (exists(file)) GlobalFonts.registerFromPath(file, family); };
 
 (function bootFonts(){
     const list = exists(fontsDir) ? fs.readdirSync(fontsDir) : [];
     console.log('[charts] fontsDir:', fontsDir, 'exists:', !!list.length, 'files:', list);
-    const used = {
-        dejavu: { reg: registerIf(DJV_REG),  bold: registerIf(DJV_BOLD) },
-        noto:   { reg: registerIf(NOTO_REG), bold: registerIf(NOTO_BOLD) },
-    };
-    const hasAlias = GlobalFonts.has(FAMILY_ALIAS);
-    console.log('[charts] registered alias "%s" ->', FAMILY_ALIAS, { ...used, hasAlias });
-    if(!used.dejavu.reg && !used.dejavu.bold && !used.noto.reg && !used.noto.bold && !hasAlias){
-        throw new Error(`[charts] Could not register fonts under "${FAMILY_ALIAS}". Ensure TTFs exist in ${fontsDir}.`);
-    }
+
+    // DejaVu
+    reg(DJV_REG, DJV_FAMILY);
+    reg(DJV_BOLD, DJV_FAMILY);
+    reg(DJV_REG, LOCAL_ALIAS);
+    reg(DJV_BOLD, LOCAL_ALIAS);
+
+    // Noto (fallback)
+    reg(NOTO_REG, NOTO_FAMILY);
+    reg(NOTO_BOLD, NOTO_FAMILY);
+    reg(NOTO_REG, LOCAL_ALIAS);
+    reg(NOTO_BOLD, LOCAL_ALIAS);
+
+    console.log('[charts] GlobalFonts.has alias?', LOCAL_ALIAS, GlobalFonts.has(LOCAL_ALIAS));
+    console.log('[charts] GlobalFonts.has DejaVu?', DJV_FAMILY, GlobalFonts.has(DJV_FAMILY));
+    console.log('[charts] GlobalFonts.has Noto?', NOTO_FAMILY, GlobalFonts.has(NOTO_FAMILY));
 })();
 
-// ---------- defaults (no plugin hacking) ----------
-Chart.defaults.font.family = FAMILY_ALIAS;
+// ---------- Chart.js defaults (NO ctx.font plugins) ----------
+Chart.defaults.font.family = FAMILY_LIST; // list, not a single token
 Chart.defaults.font.size = 14;
 Chart.defaults.color = '#1f1f1f';
 
@@ -66,26 +82,26 @@ function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } =
         plugins: {
             legend: {
                 display: Boolean(xLabel),
-                labels: { font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' }, color: '#1f1f1f' },
+                labels: { font: { family: FAMILY_LIST, size: 14, weight: 'bold' }, color: '#1f1f1f' },
             },
             title: {
                 display: Boolean(title),
                 text: fixLabel(title ?? ''),
-                font: { family: FAMILY_ALIAS, size: 20, weight: 'bold' },
+                font: { family: FAMILY_LIST, size: 20, weight: 'bold' },
                 color: '#1f1f1f',
             },
             tooltip: {
-                bodyFont: { family: FAMILY_ALIAS, size: 14 },
-                titleFont: { family: FAMILY_ALIAS, size: 16, weight: 'bold' },
+                bodyFont: { family: FAMILY_LIST, size: 14 },
+                titleFont: { family: FAMILY_LIST, size: 16, weight: 'bold' },
             },
         },
         scales: {
             x: {
                 beginAtZero,
-                ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
-                title: xLabel ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } } : undefined,
+                ticks: { font: { family: FAMILY_LIST, size: 12 }, color: '#1f1f1f' },
+                title: xLabel ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_LIST, size: 14, weight: 'bold' } } : undefined,
             },
-            y: { beginAtZero, ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' } },
+            y: { beginAtZero, ticks: { font: { family: FAMILY_LIST, size: 12 }, color: '#1f1f1f' } },
         },
     };
 }
