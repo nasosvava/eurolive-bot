@@ -8,52 +8,48 @@ import fs from 'node:fs';
 const WIDTH = 1200;
 const HEIGHT = 900;
 
-// ---------- paths ----------
+// -------- paths --------
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
-const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
-const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 
-// ---------- guards ----------
-for (const p of [fontsDir, DJV_REG, DJV_BOLD]) {
+// Use DejaVu Sans because it includes Greek
+const FAMILY = 'DejaVu Sans';
+const REG = path.join(fontsDir, 'DejaVuSans.ttf');
+const BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
+
+// -------- guards --------
+for (const p of [fontsDir, REG, BOLD]) {
     if (!fs.existsSync(p)) {
         throw new Error(`[charts] Missing required font path: ${p}`);
     }
 }
 
-// ---------- register ONE family with weights ----------
-/**
- * IMPORTANT:
- * The intrinsic family name inside these TTFs is EXACTLY "DejaVu Sans".
- * We must set the same string in Chart.js defaults. Do NOT pass a stack.
- */
-const FAMILY = 'DejaVu Sans';
+// -------- register fonts (correct API for file paths) --------
+GlobalFonts.registerFromPath(REG, FAMILY);
+GlobalFonts.registerFromPath(BOLD, FAMILY);
 
-// Weighted registration ensures Bold lookups match
-GlobalFonts.register({ family: FAMILY, src: DJV_REG, weight: '400', style: 'normal' });
-GlobalFonts.register({ family: FAMILY, src: DJV_BOLD, weight: '700', style: 'normal' });
-
-// Debug: make sure the family is actually present
+// Optional debug
 if (process.env.DEBUG) {
     console.log('[charts] fonts dir:', fontsDir);
     console.log('[charts] files:', fs.readdirSync(fontsDir));
-    console.log('[charts] has("DejaVu Sans") =', GlobalFonts.has(FAMILY));
+    console.log('[charts] has family:', FAMILY, GlobalFonts.has(FAMILY));
     console.log('[charts] families sample:', GlobalFonts.families?.slice?.(0, 20));
 }
 
+// -------- canvas factory --------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        // Use ONE exact family; no stacks, no aliases
+        // Use ONE exact family (no stacks)
         ChartJS.defaults.font.family = FAMILY;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
 });
 
-// ---------- shared options ----------
+// -------- shared options --------
 const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
     indexAxis,
     responsive: false,
@@ -92,12 +88,12 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
     },
 });
 
-// ---------- public renderers ----------
+// -------- public renderers --------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const configuration = {
         type: 'bar',
         data: {
-            labels,
+            labels, // keep Greek as-is; DejaVu Sans handles glyphs
             datasets: [{
                 label: xLabel || '',
                 data: values,
