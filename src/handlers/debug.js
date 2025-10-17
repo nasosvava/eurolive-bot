@@ -4,8 +4,8 @@ import { selfTestCanvasText } from '../charts/smoke.js';
 import { selfTestChartText } from '../charts/chartSmoke.js';
 
 export async function fontTest(interaction) {
+    await interaction.deferReply({ ephemeral: true });
     try {
-        await interaction.deferReply({ ephemeral: true });
         const buf = selfTestCanvasText();
         const file = new AttachmentBuilder(buf, { name: 'font-test.png' });
         await interaction.editReply({ content: '🧪 Skia direct text test', files: [file] });
@@ -15,8 +15,8 @@ export async function fontTest(interaction) {
 }
 
 export async function chartTest(interaction) {
+    await interaction.deferReply({ ephemeral: true });
     try {
-        await interaction.deferReply({ ephemeral: true });
         const buf = await selfTestChartText();
         const file = new AttachmentBuilder(buf, { name: 'chart-test.png' });
         await interaction.editReply({ content: '🧪 Chart.js text test', files: [file] });

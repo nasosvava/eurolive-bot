@@ -1,16 +1,15 @@
 // src/charts/smoke.js
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 
-// Draw text directly with Skia (no Chart.js)
 export function selfTestCanvasText() {
     const w = 800, h = 220;
     const canvas = createCanvas(w, h);
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = '#111111';
+    ctx.fillStyle = '#111';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
 

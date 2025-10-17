@@ -1,6 +1,5 @@
 // src/charts/render.js
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-// IMPORTANT: pull all primitives from @napi-rs/canvas and inject them!
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -13,51 +12,38 @@ const HEIGHT = 900;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// Use a space-free alias so CSS parsing quirks can’t bite us
+// Space-free alias so CSS parsing quirks can’t bite us
 const FAMILY_ALIAS = 'dejavusanslocal';
 
 // Bundled fonts (Greek-capable)
 const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
 const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
-
-// Optional Noto backup (full Unicode)
+// Optional Noto (full Unicode)
 const NOTO_REG = path.join(fontsDir, 'NotoSans-Regular.ttf');
 const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 
-// ---------- encoding guard (lightweight) ----------
-const GREEK_RANGES = [
-    [0x0370, 0x03ff],
-    [0x1f00, 0x1fff],
-];
-const countGreek = (s) => {
-    let n = 0; for (const ch of String(s)) {
-        const cp = ch.codePointAt(0); if (cp == null) continue;
-        for (const [lo, hi] of GREEK_RANGES) { if (cp >= lo && cp <= hi) { n++; break; } }
-    } return n;
-};
-const latin1RoundTrip = (s) => {
-    const t = String(s); const buf = Buffer.allocUnsafe(t.length);
-    for (let i = 0; i < t.length; i++) buf[i] = t.charCodeAt(i) & 0xff;
-    return buf.toString('latin1');
-};
+// ---------- encoding guard (mojibake defense) ----------
+const GREEK_RANGES = [[0x0370, 0x03ff],[0x1f00, 0x1fff]];
+const countGreek = (s) => { let n=0; for (const ch of String(s)) { const cp=ch.codePointAt(0); if (cp==null) continue; for (const [lo,hi] of GREEK_RANGES){ if (cp>=lo&&cp<=hi){ n++; break; }}} return n; };
+const latin1RoundTrip = (s) => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(i)&0xff; return b.toString('latin1'); };
 function repairGreek(text) {
-    const s = String(text ?? '').replace(/\s+/g, ' ').trim();
+    const s = String(text ?? '').replace(/\s+/g,' ').trim();
     if (!s) return s;
     const g0 = countGreek(s);
     const hasFFFD = s.includes('\uFFFD');
-    const nonAscii = [...s].some(c => c.charCodeAt(0) > 0x7f);
-    if (!hasFFFD && (g0 > 0 || !nonAscii)) return s.normalize('NFC');
+    const nonAscii = [...s].some(c => c.charCodeAt(0)>0x7f);
+    if (!hasFFFD && (g0>0 || !nonAscii)) return s.normalize('NFC');
     const r = latin1RoundTrip(s), g1 = countGreek(r);
-    return (g1 > g0 || hasFFFD) ? r.normalize('NFC') : s.normalize('NFC');
+    return (g1>g0 || hasFFFD) ? r.normalize('NFC') : s.normalize('NFC');
 }
 const fixLabel = (x) => repairGreek(x).replace(/[\u0000-\u001F\u007F]/g, '');
-const fixLabels = (a = []) => (a ?? []).map(fixLabel);
+const fixLabels = (a=[]) => (a ?? []).map(fixLabel);
 
 // ---------- font registration ----------
 const exists = (p) => { try { return fs.existsSync(p); } catch { return false; } };
 const registerIf = (p) => exists(p) && (GlobalFonts.registerFromPath(p, FAMILY_ALIAS), true);
 
-(function bootFonts() {
+(function bootFonts(){
     const dirExists = exists(fontsDir);
     const list = dirExists ? fs.readdirSync(fontsDir) : [];
     console.log('[charts] fontsDir:', fontsDir, 'exists:', dirExists, 'files:', list);
@@ -74,32 +60,28 @@ const registerIf = (p) => exists(p) && (GlobalFonts.registerFromPath(p, FAMILY_A
     }
 })();
 
-// ---------- force @napi-rs/canvas backend ----------
+// ---------- force Skia backend ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
-    // Inject @napi-rs/canvas so we DO NOT fall back to node-canvas:
-    canvas: { type: 'napi', createCanvas, loadImage },
+    canvas: { type: 'napi', createCanvas, loadImage }, // <— KEY
     chartCallback: (ChartJS) => {
-        ChartJS.defaults.font.family = FAMILY_ALIAS; // our alias, no spaces
+        ChartJS.defaults.font.family = FAMILY_ALIAS;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
 });
 
 // ---------- shared options ----------
-const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
+const buildCommonOptions = ({ title, xLabel, indexAxis='x', beginAtZero=true } = {}) => ({
     indexAxis,
     responsive: false,
     layout: { padding: 16 },
     plugins: {
         legend: {
             display: Boolean(xLabel),
-            labels: {
-                font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' },
-                color: '#1f1f1f',
-            },
+            labels: { font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' }, color: '#1f1f1f' },
         },
         title: {
             display: Boolean(title),
@@ -116,23 +98,17 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         x: {
             beginAtZero,
             ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
-            title: xLabel
-                ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } }
-                : undefined,
+            title: xLabel ? { text: fixLabel(xLabel), display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } } : undefined,
         },
-        y: {
-            beginAtZero,
-            ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
-        },
+        y: { beginAtZero, ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' } },
     },
 });
 
 // ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const safeLabels = fixLabels(labels);
-        const sample = safeLabels?.[0] ?? '';
-        console.log('[charts] sample label:', JSON.stringify(sample),
-            [...sample].slice(0, 16).map(c => c.codePointAt(0).toString(16)));
+    const sample = safeLabels?.[0] ?? '';
+    console.log('[charts] sample label:', JSON.stringify(sample), [...sample].slice(0,16).map(c => c.codePointAt(0).toString(16)));
 
     const configuration = {
         type: 'bar',
