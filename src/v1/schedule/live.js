@@ -23,8 +23,8 @@ function teamMatchesFilter(entry, teamFilter) {
 }
 
 /** Heuristic: consider game live if within window around tipoff and not marked final in schedule text */
-function looksLiveByTime(item, nowMs) {
-    const tip = getGameDate(item);
+function looksLiveByTime(item, nowMs, timeZone) {
+    const tip = getGameDate(item, timeZone);
     if (!tip) return false;
 
     const tipMs = tip.getTime();
@@ -58,9 +58,9 @@ export async function fetchLiveGames({
     const results = [];
 
     for (const g of games) {
-        if (!looksLiveByTime(g, now)) continue;
+        if (!looksLiveByTime(g, now, timeZone)) continue;
 
-        const when = getGameDate(g);
+        const when = getGameDate(g, timeZone);
         if (!when) continue;
 
         const home = getTeamName(g, 'home');
@@ -178,9 +178,9 @@ export async function liveAutocomplete(interaction, { timeZone = 'Europe/Athens'
         const choices = [];
 
         for (const g of games) {
-            if (!looksLiveByTime(g, now)) continue;
+            if (!looksLiveByTime(g, now, timeZone)) continue;
 
-            const when = getGameDate(g);
+            const when = getGameDate(g, timeZone);
             if (!when) continue;
 
             const home = getTeamName(g, 'home');

@@ -46,7 +46,7 @@ export async function fetchWeekGames({ seasoncode = DEFAULT_SEASON, timeZone = '
     const out = [];
 
     for (const g of games) {
-        const when = getGameDate(g);
+        const when = getGameDate(g, timeZone);
         if (!when) continue;
 
         const key = localDateKey(when, timeZone);

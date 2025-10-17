@@ -7,6 +7,21 @@ import { XMLParser } from 'fast-xml-parser';
 
 // Flip on if you want to see verbose logs while developing
 export const DEBUG_SCHEDULE = false;
+const DEFAULT_TIME_ZONE = 'Europe/Athens';
+const MONTH_LOOKUP = {
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12,
+};
 
 /* ----------------------------- Fetchers ----------------------------- */
 export async function fetchSchedule(seasonCode) {
@@ -124,8 +139,98 @@ export function getTeamName(game, which) {
     return obj || '—';
 }
 
-/** Date/time extraction (EuroLeague quirk: "date" + "startime") */
-export function getGameDate(game) {
+function parseDatePart(datePart) {
+    if (!datePart) return null;
+
+    const isoMatch = String(datePart).match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (isoMatch) {
+        return {
+            year: Number(isoMatch[1]),
+            month: Number(isoMatch[2]),
+            day: Number(isoMatch[3]),
+        };
+    }
+
+    const textualMatch = String(datePart).match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+    if (textualMatch) {
+        const monthKey = textualMatch[1].slice(0, 3).toLowerCase();
+        const month = MONTH_LOOKUP[monthKey];
+        if (!month) return null;
+        return {
+            year: Number(textualMatch[3]),
+            month,
+            day: Number(textualMatch[2]),
+        };
+    }
+
+    const fallback = parseDateAny(datePart);
+    if (fallback) {
+        return {
+            year: fallback.getUTCFullYear(),
+            month: fallback.getUTCMonth() + 1,
+            day: fallback.getUTCDate(),
+        };
+    }
+    return null;
+}
+
+function parseTimePart(timePart) {
+    if (!timePart) return null;
+    const cleaned = String(timePart).trim();
+    const match = cleaned.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const second = match[3] != null ? Number(match[3]) : 0;
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) return null;
+    return { hour, minute, second };
+}
+
+function getTimeZoneOffsetMs(date, timeZone) {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+    });
+    const parts = dtf.formatToParts(date);
+    const map = {};
+    for (const part of parts) {
+        if (part.type !== 'literal') map[part.type] = part.value;
+    }
+    const asUtc = Date.UTC(
+        Number(map.year),
+        Number(map.month) - 1,
+        Number(map.day),
+        Number(map.hour),
+        Number(map.minute),
+        Number(map.second),
+    );
+    return asUtc - date.getTime();
+}
+
+function buildZonedDate(datePart, timePart, timeZone) {
+    const dateInfo = parseDatePart(datePart);
+    const timeInfo = parseTimePart(timePart);
+    if (!dateInfo || !timeInfo) return null;
+    const baseUtc = new Date(Date.UTC(
+        dateInfo.year,
+        dateInfo.month - 1,
+        dateInfo.day,
+        timeInfo.hour,
+        timeInfo.minute,
+        timeInfo.second,
+    ));
+    const offsetMs = getTimeZoneOffsetMs(baseUtc, timeZone);
+    return new Date(baseUtc.getTime() - offsetMs);
+}
+
+/** Date/time extraction with explicit timezone handling */
+export function getGameDate(game, timeZone = DEFAULT_TIME_ZONE) {
     const utcKeys = [
         'GameDateUTC', 'gameDateUTC',
         'DateTimeUTC', 'dateTimeUTC',
@@ -141,6 +246,9 @@ export function getGameDate(game) {
     const datePart = firstKey(game, ['date', 'Date', 'gameDate', 'GameDate']);
     const timePart = firstKey(game, ['startime', 'Startime', 'starttime', 'StartTime', 'time', 'Time']);
     if (datePart && timePart) {
+        const zoned = buildZonedDate(datePart, timePart, timeZone || DEFAULT_TIME_ZONE);
+        if (zoned) return zoned;
+
         const combined = `${datePart} ${timePart}`;
         const parsed = parseDateAny(combined);
         if (parsed) return parsed;

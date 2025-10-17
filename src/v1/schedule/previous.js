@@ -42,7 +42,7 @@ export async function fetchPreviousGames({
     const rows = [];
 
     for (const g of games) {
-        const when = getGameDate(g);
+        const when = getGameDate(g, timeZone);
         if (!when) continue;
         if (when.getTime() >= now) continue; // only past games
 

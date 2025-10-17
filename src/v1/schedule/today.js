@@ -21,7 +21,7 @@ export async function fetchTodayGames({ seasoncode = DEFAULT_SEASON, timeZone = 
 
     const gamesToday = [];
     for (const g of games) {
-        const when = getGameDate(g);
+        const when = getGameDate(g, timeZone);
         if (!when) continue;
         if (localDateKey(when, timeZone) !== todayKey) continue;
 
