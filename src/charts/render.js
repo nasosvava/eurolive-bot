@@ -12,83 +12,75 @@ const HEIGHT = 900;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.resolve(here, '../../assets/fonts');
 
-// The *intrinsic* family name in the TTFs (used for registration)
-const FAMILY_NAME = 'DejaVu Sans';
-// The *CSS* font-family string we pass to Chart.js/Canvas (MUST be quoted if it has spaces)
-const FAMILY_CSS = `"${FAMILY_NAME}"`;
+// We register everything under this alias (no spaces, no punctuation),
+// then tell Chart.js to use this exact alias.
+const FAMILY_ALIAS = 'dejavusanslocal';
 
-// Bundled files we expect
-const BUNDLED = {
-    regular: path.join(fontsDir, 'DejaVuSans.ttf'),
-    bold: path.join(fontsDir, 'DejaVuSans-Bold.ttf'),
-};
+// Bundled DejaVu (has Greek)
+const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
+const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 
-// Optional alternates you may have dropped in
-const ALTS = [
-    { name: 'Noto Sans', regular: path.join(fontsDir, 'NotoSans-Regular.ttf'), bold: path.join(fontsDir, 'NotoSans-Bold.ttf') },
-];
+// Optional Noto backup (full Unicode)
+const NOTO_REG = path.join(fontsDir, 'NotoSans-Regular.ttf');
+const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 
-function fileExists(p) {
+// ---------- helpers ----------
+function exists(p) {
     try { return fs.existsSync(p); } catch { return false; }
 }
 
-function registerPair(name, regularPath, boldPath) {
-    let registered = false;
-    if (fileExists(regularPath)) {
-        GlobalFonts.registerFromPath(regularPath, name);
-        registered = true;
+function registerIfPresent(p, alias) {
+    if (exists(p)) {
+        GlobalFonts.registerFromPath(p, alias);
+        return true;
     }
-    if (fileExists(boldPath)) {
-        GlobalFonts.registerFromPath(boldPath, name);
-        registered = true;
-    }
-    return registered;
+    return false;
 }
 
-function registerFonts() {
-    const exists = fileExists(fontsDir);
-    const list = exists ? fs.readdirSync(fontsDir) : [];
-    console.log('[charts] fontsDir:', fontsDir, 'exists:', exists, 'files:', list);
+function bootFonts() {
+    const dirExists = exists(fontsDir);
+    const list = dirExists ? fs.readdirSync(fontsDir) : [];
+    console.log('[charts] fontsDir:', fontsDir, 'exists:', dirExists, 'files:', list);
 
-    // 1) Try bundled DejaVu first (register with intrinsic name)
-    let chosenName = FAMILY_NAME;
-    let registered = registerPair(FAMILY_NAME, BUNDLED.regular, BUNDLED.bold);
+    let registered = false;
 
-    // 2) If missing, try alternates (e.g., Noto Sans full)
-    if (!registered) {
-        for (const alt of ALTS) {
-            if (registerPair(alt.name, alt.regular, alt.bold)) {
-                chosenName = alt.name;
-                registered = true;
-                break;
-            }
-        }
-    }
+    // 1) Prefer DejaVu
+    const r1 = registerIfPresent(DJV_REG, FAMILY_ALIAS);
+    const r2 = registerIfPresent(DJV_BOLD, FAMILY_ALIAS);
+    registered = r1 || r2;
 
-    // 3) Check if a system font by that name exists (when Nixpacks installs dejavu_fonts / noto-fonts)
-    const hasSystem = GlobalFonts.has(chosenName);
-    console.log(`[charts] chosen family: "${chosenName}", registeredBundled=${registered}, hasSystem=${hasSystem}`);
+    // 2) Top up with Noto (same alias) if present
+    const r3 = registerIfPresent(NOTO_REG, FAMILY_ALIAS);
+    const r4 = registerIfPresent(NOTO_BOLD, FAMILY_ALIAS);
+    registered = registered || r3 || r4;
 
-    if (!registered && !hasSystem) {
+    // Skia may still have a system font with our alias? (unlikely)
+    const hasAlias = GlobalFonts.has(FAMILY_ALIAS);
+
+    console.log(`[charts] registered alias "${FAMILY_ALIAS}" ->`, {
+        dejavu: { reg: r1, bold: r2 },
+        noto: { reg: r3, bold: r4 },
+        hasAlias,
+    });
+
+    if (!registered && !hasAlias) {
         throw new Error(
-            `[charts] No usable font found. Place TTFs in ${fontsDir} (DejaVuSans.ttf, DejaVuSans-Bold.ttf) ` +
-            `or install system fonts (dejavu_fonts / noto-fonts).`
+            `[charts] Could not register fonts under "${FAMILY_ALIAS}". ` +
+            `Ensure DejaVu/Noto TTFs exist in ${fontsDir}.`
         );
     }
-    return chosenName;
 }
 
-// Register BEFORE creating the canvas
-const ACTIVE_FAMILY = registerFonts();
+bootFonts();
 
-// ---------- chart factory ----------
+// ---------- chart factory (AFTER fonts) ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        // Use the *quoted* CSS family string so Canvas parses it as a single family
-        ChartJS.defaults.font.family = FAMILY_CSS;
+        // IMPORTANT: use the alias with no spaces
+        ChartJS.defaults.font.family = FAMILY_ALIAS;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
@@ -103,32 +95,32 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         legend: {
             display: Boolean(xLabel),
             labels: {
-                font: { family: FAMILY_CSS, size: 14, weight: 'bold' },
+                font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' },
                 color: '#1f1f1f',
             },
         },
         title: {
             display: Boolean(title),
             text: title ?? '',
-            font: { family: FAMILY_CSS, size: 20, weight: 'bold' },
+            font: { family: FAMILY_ALIAS, size: 20, weight: 'bold' },
             color: '#1f1f1f',
         },
         tooltip: {
-            bodyFont: { family: FAMILY_CSS, size: 14 },
-            titleFont: { family: FAMILY_CSS, size: 16, weight: 'bold' },
+            bodyFont: { family: FAMILY_ALIAS, size: 14 },
+            titleFont: { family: FAMILY_ALIAS, size: 16, weight: 'bold' },
         },
     },
     scales: {
         x: {
             beginAtZero,
-            ticks: { font: { family: FAMILY_CSS, size: 12 }, color: '#1f1f1f' },
+            ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
             title: xLabel
-                ? { text: xLabel, display: true, font: { family: FAMILY_CSS, size: 14, weight: 'bold' } }
+                ? { text: xLabel, display: true, font: { family: FAMILY_ALIAS, size: 14, weight: 'bold' } }
                 : undefined,
         },
         y: {
             beginAtZero,
-            ticks: { font: { family: FAMILY_CSS, size: 12 }, color: '#1f1f1f' },
+            ticks: { font: { family: FAMILY_ALIAS, size: 12 }, color: '#1f1f1f' },
         },
     },
 });
@@ -138,7 +130,7 @@ export async function renderHorizontalBar({ labels, values, title, xLabel, color
     const configuration = {
         type: 'bar',
         data: {
-            labels, // Greek or Latin; the chosen family covers both
+            labels,
             datasets: [{
                 label: xLabel || '',
                 data: values,
