@@ -6,16 +6,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "register": "node src/register-commands.js"
+    "register": "node src/register-commands.js",
+    "debug": "DEBUG=1 node src/index.js"
   },
-  "keywords": [
-    "discord",
-    "bot",
-    "euroleague",
-    "basketball",
-    "live-scores"
-  ],
-  "author": "",
+  "keywords": ["discord","bot","euroleague","basketball","live-scores"],
   "license": "ISC",
   "engines": { "node": ">=18" },
   "dependencies": {

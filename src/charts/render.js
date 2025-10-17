@@ -2,57 +2,87 @@
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
 import { GlobalFonts } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
 
 const WIDTH = 1200;
 const HEIGHT = 900;
-const FONT_FAMILY = 'Noto Sans';
 
-// Ensure Noto Sans is available when running headless (production containers might lack system fonts).
-const regularFontPath = fileURLToPath(new URL('../../assets/fonts/NotoSans-Regular.ttf', import.meta.url));
-const boldFontPath = fileURLToPath(new URL('../../assets/fonts/NotoSans-Bold.ttf', import.meta.url));
+// ---------- paths ----------
+const here = path.dirname(fileURLToPath(import.meta.url));
+// from src/charts/* to root/assets/fonts/*
+const fontPath = (p) => path.resolve(here, '../../assets/fonts', p);
 
-if (!GlobalFonts.has(FONT_FAMILY)) {
-    GlobalFonts.registerFromPath(regularFontPath);
-    GlobalFonts.registerFromPath(boldFontPath);
+// Required fonts (commit them!)
+const NOTO_REG = fontPath('NotoSans-Regular.ttf');
+const NOTO_BOLD = fontPath('NotoSans-Bold.ttf');
+
+// Optional fallback (if you add them, they'll be used)
+const DEJAVU_REG = fontPath('DejaVuSans.ttf');
+const DEJAVU_BOLD = fontPath('DejaVuSans-Bold.ttf');
+
+// Aliases to defeat case/space normalization differences
+const NOTO_ALIASES = ['NotoSansLocal', 'notosanslocal', 'Noto Sans', 'noto sans'];
+const DEJAVU_ALIASES = ['DejaVuSansLocal', 'dejavusanslocal', 'DejaVu Sans', 'dejavu sans'];
+
+// Use a font stack everywhere in Chart.js
+const FONT_STACK = '"NotoSansLocal","Noto Sans","notosanslocal","noto sans","DejaVu Sans","dejavu sans","Sans"';
+
+// ---------- helpers ----------
+function assertFile(p, name) {
+    if (!fs.existsSync(p)) throw new Error(`[charts] Missing ${name} font file: ${p}`);
 }
 
-const GREEK_PAIRS = [
-    ['?', 'A'], ['?', 'A'], ['?', 'B'], ['G', 'G'], ['?', 'D'], ['?', 'E'], ['?', 'E'], ['?', 'Z'], ['?', 'I'],
-    ['?', 'I'], ['T', 'TH'], ['?', 'I'], ['?', 'I'], ['?', 'K'], ['?', 'L'], ['?', 'M'], ['?', 'N'], ['?', 'X'],
-    ['?', 'O'], ['?', 'O'], ['?', 'P'], ['?', 'R'], ['S', 'S'], ['?', 'T'], ['?', 'Y'], ['?', 'Y'], ['F', 'F'],
-    ['?', 'CH'], ['?', 'PS'], ['O', 'O'], ['?', 'O'],
-    ['a', 'a'], ['?', 'a'], ['�', 'b'], ['?', 'g'], ['d', 'd'], ['e', 'e'], ['?', 'e'], ['?', 'z'], ['?', 'i'],
-    ['?', 'i'], ['?', 'th'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'i'], ['?', 'k'], ['?', 'l'], ['�', 'm'],
-    ['?', 'n'], ['?', 'x'], ['?', 'o'], ['?', 'o'], ['p', 'p'], ['?', 'r'], ['?', 's'], ['s', 's'], ['t', 't'],
-    ['?', 'y'], ['?', 'y'], ['?', 'y'], ['?', 'y'], ['f', 'f'], ['?', 'ch'], ['?', 'ps'], ['?', 'o'], ['?', 'o']
-];
+function registerFamilyFromPath(regular, bold, aliases) {
+    for (const family of aliases) {
+        if (regular) GlobalFonts.registerFromPath(regular, family);
+        if (bold) GlobalFonts.registerFromPath(bold, family);
+    }
+}
 
-const GREEK_TO_LATIN = new Map(GREEK_PAIRS);
+// ---------- register fonts BEFORE creating ChartJSNodeCanvas ----------
+assertFile(NOTO_REG, 'NotoSans Regular');
+assertFile(NOTO_BOLD, 'NotoSans Bold');
 
-const latinize = (value) =>
-    [...String(value ?? '')]
-        .map((char) => {
-            if (GREEK_TO_LATIN.has(char)) return GREEK_TO_LATIN.get(char);
-            const upper = char.toUpperCase();
-            if (GREEK_TO_LATIN.has(upper)) {
-                const replacement = GREEK_TO_LATIN.get(upper);
-                return char === upper ? replacement : replacement.toLowerCase();
-            }
-            return char;
-        })
-        .join('');
+registerFamilyFromPath(NOTO_REG, NOTO_BOLD, NOTO_ALIASES);
 
+if (fs.existsSync(DEJAVU_REG) && fs.existsSync(DEJAVU_BOLD)) {
+    registerFamilyFromPath(DEJAVU_REG, DEJAVU_BOLD, DEJAVU_ALIASES);
+}
+
+if (process.env.DEBUG) {
+    console.log('[charts] Registered families sample:', GlobalFonts.families?.slice?.(0, 20));
+    for (const fam of [...NOTO_ALIASES, ...DEJAVU_ALIASES]) {
+        try { console.log(`[charts] has("${fam}") =`, GlobalFonts.has(fam)); } catch {}
+    }
+}
+
+// ---------- chart factory ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        ChartJS.defaults.font.family = FONT_FAMILY;
+        ChartJS.defaults.font.family = FONT_STACK;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
 });
 
+// ---------- Greek → Latin (clean mapping) ----------
+const GREEK_TO_LATIN = new Map([
+    // Uppercase
+    ['Α','A'],['Β','B'],['Γ','G'],['Δ','D'],['Ε','E'],['Ζ','Z'],['Η','I'],['Θ','TH'],
+    ['Ι','I'],['Κ','K'],['Λ','L'],['Μ','M'],['Ν','N'],['Ξ','X'],['Ο','O'],['Π','P'],
+    ['Ρ','R'],['Σ','S'],['Τ','T'],['Υ','Y'],['Φ','F'],['Χ','CH'],['Ψ','PS'],['Ω','O'],
+    // Lowercase
+    ['α','a'],['β','b'],['γ','g'],['δ','d'],['ε','e'],['ζ','z'],['η','i'],['θ','th'],
+    ['ι','i'],['κ','k'],['λ','l'],['μ','m'],['ν','n'],['ξ','x'],['ο','o'],['π','p'],
+    ['ρ','r'],['σ','s'],['ς','s'],['τ','t'],['υ','y'],['φ','f'],['χ','ch'],['ψ','ps'],['ω','o'],
+]);
+const latinize = (value) => [...String(value ?? '')].map((c) => GREEK_TO_LATIN.get(c) ?? c).join('');
+
+// ---------- shared chart options ----------
 const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
     indexAxis,
     responsive: false,
@@ -61,42 +91,37 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         legend: {
             display: Boolean(xLabel),
             labels: {
-                font: { family: FONT_FAMILY, size: 14, weight: 'bold' },
+                font: { family: FONT_STACK, size: 14, weight: 'bold' },
                 color: '#1f1f1f',
             },
         },
         title: {
             display: Boolean(title),
             text: latinize(title),
-            font: { family: FONT_FAMILY, size: 20, weight: 'bold' },
+            font: { family: FONT_STACK, size: 20, weight: 'bold' },
             color: '#1f1f1f',
         },
         tooltip: {
-            bodyFont: { family: FONT_FAMILY, size: 14 },
-            titleFont: { family: FONT_FAMILY, size: 16, weight: 'bold' },
+            bodyFont: { family: FONT_STACK, size: 14 },
+            titleFont: { family: FONT_STACK, size: 16, weight: 'bold' },
         },
     },
     scales: {
         x: {
             beginAtZero,
-            ticks: {
-                font: { family: FONT_FAMILY, size: 12 },
-                color: '#1f1f1f',
-            },
+            ticks: { font: { family: FONT_STACK, size: 12 }, color: '#1f1f1f' },
             title: xLabel
-                ? { text: latinize(xLabel), display: true, font: { family: FONT_FAMILY, size: 14, weight: 'bold' } }
+                ? { text: latinize(xLabel), display: true, font: { family: FONT_STACK, size: 14, weight: 'bold' } }
                 : undefined,
         },
         y: {
             beginAtZero,
-            ticks: {
-                font: { family: FONT_FAMILY, size: 12 },
-                color: '#1f1f1f',
-            },
+            ticks: { font: { family: FONT_STACK, size: 12 }, color: '#1f1f1f' },
         },
     },
 });
 
+// ---------- public renderers ----------
 export async function renderHorizontalBar({ labels, values, title, xLabel, colors }) {
     const configuration = {
         type: 'bar',
@@ -111,7 +136,6 @@ export async function renderHorizontalBar({ labels, values, title, xLabel, color
         },
         options: buildCommonOptions({ title, xLabel, indexAxis: 'y' }),
     };
-
     return chart.renderToBuffer(configuration, 'image/png');
 }
 
@@ -121,23 +145,12 @@ export async function renderComparisonChart({ teamA, teamB, title, metricLabel }
         data: {
             labels: [latinize(metricLabel)],
             datasets: [
-                {
-                    label: latinize(teamA.teamName),
-                    data: [teamA.value],
-                    backgroundColor: teamA.color || '#cc2033',
-                    borderRadius: 6,
-                },
-                {
-                    label: latinize(teamB.teamName),
-                    data: [teamB.value],
-                    backgroundColor: teamB.color || '#0c7b43',
-                    borderRadius: 6,
-                },
+                { label: latinize(teamA.teamName), data: [teamA.value], backgroundColor: teamA.color || '#cc2033', borderRadius: 6 },
+                { label: latinize(teamB.teamName), data: [teamB.value], backgroundColor: teamB.color || '#0c7b43', borderRadius: 6 },
             ],
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
     };
-
     return chart.renderToBuffer(configuration, 'image/png');
 }
 
@@ -153,6 +166,5 @@ export async function renderMultiComparisonChart({ labels, teamA, teamB, title }
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
     };
-
     return chart.renderToBuffer(configuration, 'image/png');
 }
