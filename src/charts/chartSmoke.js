@@ -1,18 +1,32 @@
 // src/charts/chartSmoke.js
-import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas } from '@napi-rs/canvas';
+import Chart from 'chart.js/auto';
+
+const FAMILY_ALIAS = 'dejavusanslocal';
+
+Chart.defaults.font.family = FAMILY_ALIAS;
+Chart.defaults.font.size = 16;
+Chart.defaults.color = '#111';
+
+const ForceFontPlugin = {
+    id: 'force-font',
+    beforeDraw(chart) {
+        const ctx = chart.ctx;
+        const f = ctx.font || '';
+        if (!f) return;
+        const patched = f.replace(/(['"])?[^,'"]+(['"])?\s*$/, FAMILY_ALIAS);
+        if (patched !== f) ctx.font = patched;
+    }
+};
+Chart.register(ForceFontPlugin);
 
 export async function selfTestChartText() {
     const width = 900, height = 600;
-    const chart = new ChartJSNodeCanvas({
-        width, height, backgroundColour: 'white',
-        canvas: { createCanvas, loadImage },
-        chartCallback: (ChartJS) => {
-            ChartJS.defaults.font.family = 'dejavusanslocal';
-            ChartJS.defaults.font.size = 16;
-            ChartJS.defaults.color = '#111';
-        }
-    });
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0,0,width,height);
 
     const cfg = {
         type: 'bar',
@@ -23,15 +37,21 @@ export async function selfTestChartText() {
         options: {
             responsive: false,
             plugins: {
-                legend: { labels: { font: { family: 'dejavusanslocal', size: 14 } } },
-                title: { display: true, text: 'Font Smoke Test', font: { family: 'dejavusanslocal', size: 20, weight: 'bold' } },
+                legend: { labels: { font: { family: FAMILY_ALIAS, size: 14 } } },
+                title: { display: true, text: 'Font Smoke Test', font: { family: FAMILY_ALIAS, size: 20, weight: 'bold' } },
             },
             scales: {
-                x: { ticks: { font: { family: 'dejavusanslocal', size: 12 } } },
-                y: { beginAtZero: true, ticks: { font: { family: 'dejavusanslocal', size: 12 } } }
+                x: { ticks: { font: { family: FAMILY_ALIAS, size: 12 } } },
+                y: { beginAtZero: true, ticks: { font: { family: FAMILY_ALIAS, size: 12 } } }
             }
-        }
+        },
+        plugins: [ForceFontPlugin],
     };
 
-    return chart.renderToBuffer(cfg, 'image/png');
+    const chart = new Chart(ctx, cfg);
+    chart.update();
+    await Promise.resolve();
+    const png = canvas.toBuffer('image/png');
+    chart.destroy();
+    return png;
 }
