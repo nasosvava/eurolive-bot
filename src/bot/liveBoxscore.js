@@ -2,10 +2,12 @@
 import { Events } from 'discord.js';
 import { LIVE_BOX_CHANNEL_ID, DEFAULT_SEASON, EUROLEAGUE_BOXSCORE } from '../env.js';
 import { fetchLiveGames } from '../v1/schedule/live.js';
+import { formatDateLabel, formatTimeHHMM } from '../v1/schedule/common.js';
 
 const POLL_INTERVAL_MS = 1000;
 const NO_GAMES_KEY = '__no_games__';
 const LOG_LIVE_BOX = process.env.LIVE_BOX_DEBUG === '1';
+const DISPLAY_TZ = 'Europe/Athens';
 
 const logDebug = (...args) => {
     if (!LOG_LIVE_BOX) return;
@@ -113,6 +115,15 @@ function buildEmbed(game, boxscore) {
     const description = `**${game.home}** ${formatScore(game.homeScore)}\n**${game.away}** ${formatScore(game.awayScore)}`;
 
     const fields = [];
+
+    if (game.date instanceof Date && !Number.isNaN(game.date)) {
+        const tipLabel = `${formatDateLabel(game.date, DISPLAY_TZ)} ${formatTimeHHMM(game.date, DISPLAY_TZ)}`;
+        fields.push({
+            name: 'Tip-off (Greece)',
+            value: tipLabel,
+            inline: false,
+        });
+    }
 
     const homeBox = matchTeamBoxscore(boxscore, game.home);
     const awayBox = matchTeamBoxscore(boxscore, game.away);
@@ -300,7 +311,7 @@ class LiveBoxscoreManager {
         if (this.polling) return;
         this.polling = true;
         try {
-            const games = await fetchLiveGames({ seasoncode: DEFAULT_SEASON });
+            const games = await fetchLiveGames({ seasoncode: DEFAULT_SEASON, timeZone: DISPLAY_TZ });
             logDebug(`fetched ${games.length} games`);
 
             const liveGames = [];
