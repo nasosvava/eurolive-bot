@@ -24,7 +24,7 @@ const NOTO_BOLD = path.join(fontsDir, 'NotoSans-Bold.ttf');
 // ---------- mojibake guard ----------
 const GREEK_RANGES = [[0x0370,0x03ff],[0x1f00,0x1fff]];
 const countGreek = s => { let n=0; for (const ch of String(s)) { const cp=ch.codePointAt(0); if (cp==null) continue; for (const [lo,hi] of GREEK_RANGES) if (cp>=lo&&cp<=hi){n++;break;} } return n; };
-const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(0+i)&0xff; return b.toString('latin1'); };
+const latin1RoundTrip = s => { const t=String(s); const b=Buffer.allocUnsafe(t.length); for (let i=0;i<t.length;i++) b[i]=t.charCodeAt(i)&0xff; return b.toString('latin1'); };
 function repairGreek(text){
     const s=String(text??'').replace(/\s+/g,' ').trim(); if(!s) return s;
     const g0=countGreek(s), hasFFFD=s.includes('\uFFFD'), nonAscii=[...s].some(c=>c.charCodeAt(0)>0x7f);
@@ -53,23 +53,10 @@ const registerIf = p => exists(p) && (GlobalFonts.registerFromPath(p, FAMILY_ALI
     }
 })();
 
-// ---------- force our font ----------
+// ---------- defaults (no plugin hacking) ----------
 Chart.defaults.font.family = FAMILY_ALIAS;
 Chart.defaults.font.size = 14;
 Chart.defaults.color = '#1f1f1f';
-
-// enforce alias on any ctx.font
-const ForceFontPlugin = {
-    id: 'force-font',
-    beforeDraw(chart) {
-        const ctx = chart.ctx;
-        const f = ctx.font || '';
-        if (!f) return;
-        const patched = f.replace(/(['"])?[^,'"]+(['"])?\s*$/, FAMILY_ALIAS);
-        if (patched !== f) ctx.font = patched;
-    }
-};
-Chart.register(ForceFontPlugin);
 
 function buildCommonOptions({ title, xLabel, indexAxis='x', beginAtZero=true } = {}) {
     return {
@@ -107,14 +94,13 @@ async function renderChartToBuffer(cfg){
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext('2d');
 
-    ctx.save();
+    // white background
     ctx.fillStyle = '#fff';
     ctx.fillRect(0,0,WIDTH,HEIGHT);
-    ctx.restore();
 
     const chart = new Chart(ctx, cfg);
     chart.update();
-    await Promise.resolve();
+    await Promise.resolve(); // flush async measure
     const png = canvas.toBuffer('image/png');
     chart.destroy();
     return png;
@@ -138,7 +124,6 @@ export async function renderHorizontalBar({ labels, values, title, xLabel, color
             }],
         },
         options: buildCommonOptions({ title, xLabel, indexAxis: 'y' }),
-        plugins: [ForceFontPlugin],
     });
 }
 
@@ -153,7 +138,6 @@ export async function renderComparisonChart({ teamA, teamB, title, metricLabel }
             ],
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
-        plugins: [ForceFontPlugin],
     });
 }
 
@@ -163,11 +147,10 @@ export async function renderMultiComparisonChart({ labels, teamA, teamB, title }
         data: {
             labels: fixLabels(labels),
             datasets: [
-                { label: fixLabel(teamA.label), data: teamA.values, backgroundColor: teamA.color || '#cc2033', borderRadius: 4 },
-                { label: fixLabel(teamB.label), data: teamB.values, backgroundColor: teamB.color || '#0c7b43', borderRadius: 4 },
+                { label: fixLabel(teamA.label), data: teamA.values, backgroundColor: teamA.color || '#0c7b43', borderRadius: 4 },
+                { label: fixLabel(teamB.label), data: teamB.values, backgroundColor: teamB.color || '#cc2033', borderRadius: 4 },
             ],
         },
         options: buildCommonOptions({ title, beginAtZero: true }),
-        plugins: [ForceFontPlugin],
     });
 }
