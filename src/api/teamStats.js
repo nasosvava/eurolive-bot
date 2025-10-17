@@ -9,6 +9,15 @@ import { resolveSeasonAndCompetition } from '../utils/season.js';
 import { enrichTeamVisuals } from './clubMetadata.js';
 import { fetchThreeStepsClubStats } from './threeStepsGeneric.js';
 
+// -------------------------------
+// Encoding / text utilities
+// -------------------------------
+
+// If you want a stronger decoder, uncomment the two lines below and
+// replace decodeLatin1() with iconv-lite's decode on demand.
+// import iconv from 'iconv-lite';               // npm i iconv-lite
+// const decode1253 = (buf) => iconv.decode(buf, 'windows-1253');
+
 const CACHE = new Map(); // key (competition:season) -> { at, data }
 const TTL_MS = 60_000;
 
@@ -19,6 +28,7 @@ const num = (value, fallback = 0) => {
     return Number.isFinite(n) ? n : fallback;
 };
 
+// Normalizes to a lookup key (ASCII)
 const normalizeName = (value) => {
     return String(value || '')
         .toLowerCase()
@@ -56,6 +66,85 @@ const normalizeLookupKey = (value) => {
         .replace(/\p{Diacritic}/gu, '')
         .replace(/[^a-z0-9]/g, '');
 };
+
+// --- Encoding repair helpers ---
+// Some sources occasionally serve CP-1253/ISO-8859-7 bytes that end up
+// as mojibake when read as UTF-8. We try a lightweight repair:
+// 1) If the string contains many replacement chars (U+FFFD) or very few
+//    valid Greek code points, we attempt a latin1-byte reinterpretation.
+// 2) If the "repaired" string yields more Greek code points, we keep it.
+
+const GREEK_RANGES = [
+    [0x0370, 0x03FF], // Greek and Coptic
+    [0x1F00, 0x1FFF], // Greek Extended
+];
+
+function countGreekCodePoints(str) {
+    let c = 0;
+    for (const ch of str) {
+        const cp = ch.codePointAt(0);
+        if (cp === undefined) continue;
+        for (const [lo, hi] of GREEK_RANGES) {
+            if (cp >= lo && cp <= hi) {
+                c++;
+                break;
+            }
+        }
+    }
+    return c;
+}
+
+function containsReplacement(str) {
+    return str.includes('\uFFFD');
+}
+
+// decode bytes that correspond to the current string's lower 8 bits
+function decodeLatin1ToUnicode(str) {
+    const buf = Buffer.allocUnsafe(str.length);
+    // write each char's low byte back to a buffer (latin1)
+    for (let i = 0; i < str.length; i++) {
+        buf[i] = str.charCodeAt(i) & 0xff;
+    }
+    // Try to interpret as cp-1253. If you installed iconv-lite, use it:
+    // return decode1253(buf);
+    // Without iconv-lite, latin1→utf8 works for many cases where the server
+    // sent single-byte Greek and it got mis-decoded — not perfect, but safe.
+    return buf.toString('latin1');
+}
+
+function repairGreekMojibake(value) {
+    const s = String(value ?? '').trim();
+    if (!s) return s;
+
+    const greekBefore = countGreekCodePoints(s);
+    const hasFFFD = containsReplacement(s);
+
+    // Heuristic: if there are no Greek letters but many non-ASCII bytes or we see U+FFFD, try repair
+    const nonAscii = [...s].filter((ch) => ch.charCodeAt(0) > 0x7f).length;
+    if (greekBefore > 0 && !hasFFFD) return s;
+    if (nonAscii === 0 && !hasFFFD) return s;
+
+    const repaired = decodeLatin1ToUnicode(s);
+    const greekAfter = countGreekCodePoints(repaired);
+
+    // Keep the version with more Greek characters (or if originals had replacement chars)
+    if (greekAfter > greekBefore || hasFFFD) {
+        return repaired.normalize('NFC');
+    }
+    return s.normalize('NFC');
+}
+
+function cleanDisplayName(value) {
+    const t = String(value ?? '').trim();
+    if (!t) return '';
+    // First normalize spacing/control chars
+    const basic = t.replace(/\s+/g, ' ').replace(/[\u0000-\u001F\u007F]/g, '');
+    // Attempt mojibake repair
+    const fixed = repairGreekMojibake(basic);
+    return fixed.normalize('NFC');
+}
+
+// -------------------------------
 
 function applyThreeStepsOverlay(teams = [], overlayTeams = []) {
     if (!teams.length || !overlayTeams.length) return;
@@ -214,8 +303,11 @@ const extractTeamImage = (teamObj = {}) => {
 };
 
 function mapThreeStepsTeam(entry = {}) {
-    const shortName = entry.shortName || entry.clubId || entry.teamName || 'TEAM';
+    const shortNameRaw = entry.shortName || entry.clubId || entry.teamName || 'TEAM';
+    const shortName = cleanDisplayName(shortNameRaw);
+    const teamName = cleanDisplayName(entry.teamName || shortNameRaw);
     const teamCode = (entry.clubId || shortName || '').toUpperCase();
+
     const offPossessions = num(entry.offPossessions ?? entry.possessionsOffense);
     const defPossessions = num(entry.defPossessions ?? entry.possessionsDefense);
 
@@ -224,7 +316,7 @@ function mapThreeStepsTeam(entry = {}) {
 
     return {
         teamCode,
-        teamName: entry.teamName || shortName,
+        teamName,
         shortName,
         clubId: entry.clubId || teamCode,
         primaryColor: entry.primaryColor || null,
@@ -294,7 +386,8 @@ function computePossessions(stats) {
 
 function pickRecord(records, name) {
     if (!records?.length) return null;
-    const key = normalizeName(name);
+    const display = cleanDisplayName(name);
+    const key = normalizeName(display);
     let best = null;
     for (const record of records) {
         if (!record?._normName) continue;
@@ -307,16 +400,25 @@ function pickRecord(records, name) {
 }
 
 function buildTeamEntry({
-    teamPer,
-    teamTotal,
-    opponentPer,
-    record,
-}) {
-    const code = teamPer.team?.code || teamPer.team?.tvCodes?.split?.(';')?.[0] || teamPer.team?.name || 'UNK';
-    const name = teamPer.team?.name || teamPer.team?.clubName || code;
-    const shortName = teamPer.team?.tvCodes?.split?.(';')?.[0] ||
+                            teamPer,
+                            teamTotal,
+                            opponentPer,
+                            record,
+                        }) {
+    const code =
+        teamPer.team?.code ||
+        teamPer.team?.tvCodes?.split?.(';')?.[0] ||
+        teamPer.team?.name ||
+        'UNK';
+
+    const nameRaw = teamPer.team?.name || teamPer.team?.clubName || code;
+    const name = cleanDisplayName(nameRaw);
+
+    const shortNameRaw =
+        teamPer.team?.tvCodes?.split?.(';')?.[0] ||
         teamPer.team?.alias ||
         code;
+    const shortName = cleanDisplayName(shortNameRaw);
 
     const games = num(teamPer.gamesPlayed) || num(teamTotal.gamesPlayed);
     const minutesPerGame = num(teamPer.minutesPlayed) || 40;
@@ -389,14 +491,17 @@ async function loadRecords(season) {
     try {
         const data = await fetchStandings(season);
         const rows = data?.rows ?? [];
-        return rows.map((row) => ({
-            wins: num(row.wins),
-            losses: num(row.losses),
-            ties: num(row.ties),
-            rank: num(row.rank),
-            name: row.team,
-            _normName: normalizeName(row.team),
-        }));
+        return rows.map((row) => {
+            const display = cleanDisplayName(row.team);
+            return {
+                wins: num(row.wins),
+                losses: num(row.losses),
+                ties: num(row.ties),
+                rank: num(row.rank),
+                name: display,
+                _normName: normalizeName(display),
+            };
+        });
     } catch {
         return [];
     }
@@ -468,6 +573,13 @@ export async function fetchTeamStats(seasonCode = EUROLEAGUE_SEASON_CODE, compet
     const oppByCode = new Map(oppTeams.map((item) => [item.team?.code, item]));
 
     const teams = perTeams.map((teamPer) => {
+        // Clean display names as early as possible
+        if (teamPer?.team) {
+            if (teamPer.team.name) teamPer.team.name = cleanDisplayName(teamPer.team.name);
+            if (teamPer.team.clubName) teamPer.team.clubName = cleanDisplayName(teamPer.team.clubName);
+            if (teamPer.team.alias) teamPer.team.alias = cleanDisplayName(teamPer.team.alias);
+        }
+
         const code = teamPer.team?.code || teamPer.team?.tvCodes?.split?.(';')?.[0];
         const teamTotal = totalsByCode.get(code) ?? teamPer;
         const opponent = oppByCode.get(code) ?? {};
@@ -499,4 +611,3 @@ export async function fetchTeamStats(seasonCode = EUROLEAGUE_SEASON_CODE, compet
     CACHE.set(cacheKey, { at: now, data });
     return data;
 }
-
