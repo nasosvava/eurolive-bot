@@ -10,67 +10,50 @@ const HEIGHT = 900;
 
 // ---------- paths ----------
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FONTS_DIR = path.resolve(here, '../../assets/fonts');
+const fontsDir = path.resolve(here, '../../assets/fonts');
+const DJV_REG = path.join(fontsDir, 'DejaVuSans.ttf');
+const DJV_BOLD = path.join(fontsDir, 'DejaVuSans-Bold.ttf');
 
-// ---------- load all fonts on disk (intrinsic family names) ----------
-function loadAllFonts(dir) {
-    if (!fs.existsSync(dir)) {
-        throw new Error(`[charts] Fonts directory missing: ${dir}`);
-    }
-    const files = fs.readdirSync(dir).filter(f => /\.(ttf|otf)$/i.test(f));
-    if (!files.length) {
-        throw new Error(`[charts] No .ttf/.otf files found in: ${dir}`);
-    }
-    for (const f of files) {
-        const p = path.join(dir, f);
-        try {
-            // Use the font's own internal family name (best for weight/style matching)
-            GlobalFonts.registerFromPath(p);
-        } catch (e) {
-            console.warn(`[charts] Failed to register "${f}":`, e?.message || e);
-        }
+// ---------- guards ----------
+for (const p of [fontsDir, DJV_REG, DJV_BOLD]) {
+    if (!fs.existsSync(p)) {
+        throw new Error(`[charts] Missing required font path: ${p}`);
     }
 }
 
-loadAllFonts(FONTS_DIR);
+// ---------- register ONE family with weights ----------
+/**
+ * IMPORTANT:
+ * The intrinsic family name inside these TTFs is EXACTLY "DejaVu Sans".
+ * We must set the same string in Chart.js defaults. Do NOT pass a stack.
+ */
+const FAMILY = 'DejaVu Sans';
 
-// ---------- choose family & stack ----------
-// These must match the *intrinsic* names of the TTFs you added.
-// For Google Noto & DejaVu they are exactly "Noto Sans" and "DejaVu Sans".
-const PRIMARY_FAMILY = 'Noto Sans';
-const FALLBACK_FAMILY = 'DejaVu Sans';
+// Weighted registration ensures Bold lookups match
+GlobalFonts.register({ family: FAMILY, src: DJV_REG, weight: '400', style: 'normal' });
+GlobalFonts.register({ family: FAMILY, src: DJV_BOLD, weight: '700', style: 'normal' });
 
-// font stack used by Chart.js (first available wins)
-const FONT_STACK = `"${PRIMARY_FAMILY}","${FALLBACK_FAMILY}","Sans"`;
-
-// sanity check: do we have at least one usable family?
-const hasPrimary = GlobalFonts.has(PRIMARY_FAMILY);
-const hasFallback = GlobalFonts.has(FALLBACK_FAMILY);
-if (!hasPrimary && !hasFallback) {
-    // Helpful dump for debugging
-    console.error('[charts] Known families sample:', GlobalFonts.families?.slice?.(0, 25));
-    throw new Error(
-        `[charts] Neither "${PRIMARY_FAMILY}" nor "${FALLBACK_FAMILY}" registered. ` +
-        `Ensure you placed full-Unicode TTFs (with Greek) in ${FONTS_DIR}.`
-    );
+// Debug: make sure the family is actually present
+if (process.env.DEBUG) {
+    console.log('[charts] fonts dir:', fontsDir);
+    console.log('[charts] files:', fs.readdirSync(fontsDir));
+    console.log('[charts] has("DejaVu Sans") =', GlobalFonts.has(FAMILY));
+    console.log('[charts] families sample:', GlobalFonts.families?.slice?.(0, 20));
 }
 
-// ---------- chart factory ----------
 const chart = new ChartJSNodeCanvas({
     width: WIDTH,
     height: HEIGHT,
     backgroundColour: 'white',
     chartCallback: (ChartJS) => {
-        ChartJS.defaults.font.family = FONT_STACK;
+        // Use ONE exact family; no stacks, no aliases
+        ChartJS.defaults.font.family = FAMILY;
         ChartJS.defaults.font.size = 14;
         ChartJS.defaults.color = '#1f1f1f';
     },
 });
 
-// ---------- OPTIONAL: if you WANT Greek text as-is, do NOT latinize ----------
-// Keep labels untouched so they render in Greek.
-// If you want forced ASCII, you can re-enable your previous latinize().
-
+// ---------- shared options ----------
 const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true } = {}) => ({
     indexAxis,
     responsive: false,
@@ -79,32 +62,32 @@ const buildCommonOptions = ({ title, xLabel, indexAxis = 'x', beginAtZero = true
         legend: {
             display: Boolean(xLabel),
             labels: {
-                font: { family: FONT_STACK, size: 14, weight: 'bold' },
+                font: { family: FAMILY, size: 14, weight: 'bold' },
                 color: '#1f1f1f',
             },
         },
         title: {
             display: Boolean(title),
             text: title ?? '',
-            font: { family: FONT_STACK, size: 20, weight: 'bold' },
+            font: { family: FAMILY, size: 20, weight: 'bold' },
             color: '#1f1f1f',
         },
         tooltip: {
-            bodyFont: { family: FONT_STACK, size: 14 },
-            titleFont: { family: FONT_STACK, size: 16, weight: 'bold' },
+            bodyFont: { family: FAMILY, size: 14 },
+            titleFont: { family: FAMILY, size: 16, weight: 'bold' },
         },
     },
     scales: {
         x: {
             beginAtZero,
-            ticks: { font: { family: FONT_STACK, size: 12 }, color: '#1f1f1f' },
+            ticks: { font: { family: FAMILY, size: 12 }, color: '#1f1f1f' },
             title: xLabel
-                ? { text: xLabel, display: true, font: { family: FONT_STACK, size: 14, weight: 'bold' } }
+                ? { text: xLabel, display: true, font: { family: FAMILY, size: 14, weight: 'bold' } }
                 : undefined,
         },
         y: {
             beginAtZero,
-            ticks: { font: { family: FONT_STACK, size: 12 }, color: '#1f1f1f' },
+            ticks: { font: { family: FAMILY, size: 12 }, color: '#1f1f1f' },
         },
     },
 });
