@@ -8,6 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 // Flip on if you want to see verbose logs while developing
 export const DEBUG_SCHEDULE = false;
 const DEFAULT_TIME_ZONE = 'Europe/Athens';
+const SCHEDULE_SOURCE_TZ = process.env.EUROLEAGUE_SCHEDULE_TZ || 'Europe/Paris';
 const MONTH_LOOKUP = {
     jan: 1,
     feb: 2,
@@ -21,28 +22,6 @@ const MONTH_LOOKUP = {
     oct: 10,
     nov: 11,
     dec: 12,
-};
-const TEAM_TIMEZONES = {
-    ASV: 'Europe/Paris',
-    BAR: 'Europe/Madrid',
-    BAS: 'Europe/Madrid',
-    DUB: 'Asia/Dubai',
-    HTA: 'Asia/Jerusalem',
-    IST: 'Europe/Istanbul',
-    MAD: 'Europe/Madrid',
-    MCO: 'Europe/Monaco',
-    MIL: 'Europe/Rome',
-    MUN: 'Europe/Berlin',
-    OLY: 'Europe/Athens',
-    PAM: 'Europe/Madrid',
-    PAN: 'Europe/Athens',
-    PAR: 'Europe/Belgrade',
-    PRS: 'Europe/Paris',
-    RED: 'Europe/Belgrade',
-    TEL: 'Asia/Jerusalem',
-    ULK: 'Europe/Istanbul',
-    VIR: 'Europe/Rome',
-    ZAL: 'Europe/Vilnius',
 };
 
 /* ----------------------------- Fetchers ----------------------------- */
@@ -161,28 +140,6 @@ export function getTeamName(game, which) {
     return obj || '—';
 }
 
-function getHomeCode(game) {
-    const direct =
-        firstKey(game, ['homecode', 'homeCode', 'HomeCode', '@_homecode']) ?? null;
-    if (direct) return direct;
-
-    const homeObj = firstKey(game, ['HomeTeam', 'homeTeam', 'home', 'Home']);
-    if (homeObj && typeof homeObj === 'object') {
-        return (
-            firstKey(homeObj, ['code', 'Code', 'clubCode', 'ClubCode']) ??
-            firstKey(homeObj, ['abbreviation', 'Abbreviation']) ??
-            null
-        );
-    }
-    return null;
-}
-
-function resolveHomeTimeZone(game, fallback) {
-    const code = getHomeCode(game);
-    if (code && TEAM_TIMEZONES[code]) return TEAM_TIMEZONES[code];
-    return fallback;
-}
-
 function parseDatePart(datePart) {
     if (!datePart) return null;
 
@@ -290,8 +247,7 @@ export function getGameDate(game, timeZone = DEFAULT_TIME_ZONE) {
     const datePart = firstKey(game, ['date', 'Date', 'gameDate', 'GameDate']);
     const timePart = firstKey(game, ['startime', 'Startime', 'starttime', 'StartTime', 'time', 'Time']);
     if (datePart && timePart) {
-        const localZone = resolveHomeTimeZone(game, timeZone || DEFAULT_TIME_ZONE);
-        const zoned = buildZonedDate(datePart, timePart, localZone);
+        const zoned = buildZonedDate(datePart, timePart, SCHEDULE_SOURCE_TZ);
         if (zoned) return zoned;
 
         const combined = `${datePart} ${timePart}`;
